@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f3f7f1;
+  --surface: #ffffff;
+  --ink: #111827;
+  --muted: #4b5563;
+  --line: #e5e7eb;
+  --saffron: #166534;
+  --saffron-deep: #14532d;
+  --saffron-pale: #dcfce7;
+  --leaf: #166534;
+  --leaf-pale: #dcfce7;
+  --amber: #d97706;
+  --amber-pale: #fef3c7;
+  --danger: #dc2626;
+  --danger-pale: #fee2e2;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow: 0 4px 20px -2px rgb(0 0 0 / 0.05), 0 2px 6px -1px rgb(0 0 0 / 0.03);
+  --shadow-lg: 0 20px 35px -5px rgb(0 0 0 / 0.1), 0 8px 15px -3px rgb(0 0 0 / 0.05);
+}
+
+* { box-sizing: border-box; }
+
+html { background: var(--paper); }
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background-color: var(--paper);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, textarea, select { font: inherit; }
+
+:focus-visible {
+  outline: 3px solid #22c55e;
+  outline-offset: 2px;
+}
+
+.utility-type {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.03em;
+}
+
+.paper-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  border-radius: 1rem;
+}
+
+.service-strip {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffffff 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+}
+
+.service-strip::after {
+  content: "";
+  position: absolute;
+  inset: auto -24px -26px auto;
+  width: 110px;
+  height: 110px;
+  border: 1px solid rgb(22 101 52 / 0.2);
+  border-radius: 999px;
+  box-shadow: 0 0 0 16px rgb(22 101 52 / 0.08), 0 0 0 33px rgb(22 101 52 / 0.04);
+  pointer-events: none;
+}
+
+/* Custom scrollbar for horizontal ribbons */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .arrive { animation: arrive 250ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .arrive-delay { animation: arrive 250ms 80ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .slide-up { animation: slideUp 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
+
+@keyframes arrive {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}

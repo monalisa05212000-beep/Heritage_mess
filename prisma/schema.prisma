@@ -1,0 +1,870 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  CUSTOMER
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum MealTypeStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum SubscriptionType {
+  PREPAID
+  COUNT
+}
+
+enum SubscriptionStatus {
+  DRAFT
+  PENDING_PAYMENT
+  SCHEDULED
+  ACTIVE
+  ENDED
+  CANCELLED
+}
+
+enum MenuStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum OrderSource {
+  CUSTOMER
+  ADMIN_MANUAL
+  REPLACEMENT
+}
+
+enum OrderItemStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  VOIDED
+}
+
+enum AllocationKind {
+  PREPAID
+  COUNT
+  PAYG
+}
+
+enum ReservationStatus {
+  RESERVED
+  RELEASED
+  CONSUMED
+  VOIDED
+}
+
+enum EntitlementEffectType {
+  ISSUED
+  RESERVED
+  RESERVATION_RELEASED
+  CONSUMED
+  RESTORED
+  ADJUSTED
+  CARRIED_FORWARD
+}
+
+enum CapacityEffectType {
+  RESERVED
+  RELEASED
+  CONSUMED
+}
+
+enum ChargeStatus {
+  POSTED
+  INVOICED
+  REVERSED
+}
+
+enum LedgerEntryType {
+  CHARGE
+  PAYMENT
+  CREDIT
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  OTHER
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+  VOIDED
+}
+
+enum ClosureStatus {
+  DRAFT
+  PROCESSED
+  CORRECTED
+}
+
+enum IdempotencyStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+model Business {
+  id              String                @id @default(uuid()) @db.Uuid
+  name            String
+  phone           String
+  address         String?
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  users           User[]
+  customers       Customer[]
+  settings        BusinessSetting[]
+  mealTypes       MealType[]
+  planTemplates   PlanTemplate[]
+  prices          Price[]
+  menus           Menu[]
+  subscriptions   Subscription[]
+  orders          Order[]
+  orderItems      OrderItem[]
+  entitlements    Entitlement[]
+  charges         Charge[]
+  payments        Payment[]
+  ledgerEntries   LedgerEntry[]
+  adjustments     FinancialAdjustment[]
+  invoices        Invoice[]
+  closureDays     ClosureDay[]
+  auditLogs       AuditLog[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@map("businesses")
+}
+
+model User {
+  id            String         @id @default(uuid()) @db.Uuid
+  businessId    String         @map("business_id") @db.Uuid
+  role          UserRole
+  name          String
+  phone         String?
+  email         String?        @unique
+  passwordHash  String?        @map("password_hash")
+  status        AccountStatus  @default(ACTIVE)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business      Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer      Customer?      @relation("CustomerUser")
+  adminSessions AdminSession[]
+  auditLogs     AuditLog[]     @relation("AuditActor")
+
+  @@unique([businessId, id])
+  @@index([businessId, role, status])
+  @@map("users")
+}
+
+model Customer {
+  id                  String                @id @default(uuid()) @db.Uuid
+  businessId          String                @map("business_id") @db.Uuid
+  userId              String?               @unique @map("user_id") @db.Uuid
+  name                String
+  phone               String
+  normalizedPhone     String                @map("normalized_phone")
+  status              AccountStatus         @default(ACTIVE)
+  payAsYouGoEnabled   Boolean               @default(false) @map("pay_as_you_go_enabled")
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business            Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  user                User?                 @relation("CustomerUser", fields: [userId], references: [id], onDelete: SetNull)
+  sessions            CustomerSession[]
+  subscriptions       Subscription[]
+  orders              Order[]
+  orderItems          OrderItem[]
+  entitlements        Entitlement[]
+  payments            Payment[]
+  paymentApplications PaymentApplication[]
+  ledgerEntries       LedgerEntry[]
+  adjustments         FinancialAdjustment[]
+  invoices            Invoice[]
+  charges             Charge[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, normalizedPhone])
+  @@index([businessId, status])
+  @@index([businessId, name])
+  @@map("customers")
+}
+
+model BusinessSetting {
+  id           String   @id @default(uuid()) @db.Uuid
+  businessId   String   @map("business_id") @db.Uuid
+  settingKey   String   @map("setting_key")
+  settingValue Json     @map("setting_value")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business     Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, settingKey])
+  @@map("business_settings")
+}
+
+model SetupState {
+  key       String   @id
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("setup_state")
+}
+
+model AdminSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(6)
+  lastUsedAt    DateTime? @map("last_used_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  ipHash        String?   @map("ip_hash")
+  userAgent     String?   @map("user_agent")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("admin_sessions")
+}
+
+model CustomerSession {
+  id            String    @id @default(uuid()) @db.Uuid
+  customerId    String    @map("customer_id") @db.Uuid
+  tokenHash     String    @unique @map("token_hash")
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz(6)
+  invalidatedAt DateTime? @map("invalidated_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  customer      Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, expiresAt])
+  @@map("customer_sessions")
+}
+
+model LoginAttempt {
+  id         String   @id @default(uuid()) @db.Uuid
+  email      String
+  ipHash     String?  @map("ip_hash")
+  succeeded  Boolean  @default(false)
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  @@index([email, occurredAt])
+  @@map("login_attempts")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  action      String
+  beforeData  Json?    @map("before_data")
+  afterData   Json?    @map("after_data")
+  reason      String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, entityType, entityId])
+  @@index([businessId, createdAt])
+  @@map("audit_logs")
+}
+
+model MealType {
+  id                        String                       @id @default(uuid()) @db.Uuid
+  businessId                String                       @map("business_id") @db.Uuid
+  code                      String
+  name                      String
+  status                    MealTypeStatus               @default(ACTIVE)
+  sortOrder                 Int                          @map("sort_order")
+  orderingCutoffMinutes     Int                          @map("ordering_cutoff_minutes")
+  cancellationCutoffMinutes Int                          @map("cancellation_cutoff_minutes")
+  createdAt                 DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                 DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business                  Business                     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  planTemplateItems         PlanTemplateItem[]
+  subscriptionItems         SubscriptionItem[]
+  prices                    Price[]
+  menuItems                 MenuItem[]
+  orderItems                OrderItem[]
+  entitlements              Entitlement[]
+  capacityPeriods           SubscriptionCapacityPeriod[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, code])
+  @@index([businessId, status, sortOrder])
+  @@map("meal_types")
+}
+
+model PlanTemplate {
+  id                  String             @id @default(uuid()) @db.Uuid
+  businessId          String             @map("business_id") @db.Uuid
+  name                String
+  type                SubscriptionType
+  requiredAmountMinor Int?               @map("required_amount_minor")
+  active              Boolean            @default(true)
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business            Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  items               PlanTemplateItem[]
+  subscriptions       Subscription[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, name])
+  @@index([businessId, active, type])
+  @@map("plan_templates")
+}
+
+model PlanTemplateItem {
+  id             String       @id @default(uuid()) @db.Uuid
+  businessId     String       @map("business_id") @db.Uuid
+  planTemplateId String       @map("plan_template_id") @db.Uuid
+  mealTypeId     String       @map("meal_type_id") @db.Uuid
+  quantity       Int
+  planTemplate   PlanTemplate @relation(fields: [planTemplateId], references: [id], onDelete: Cascade)
+  mealType       MealType     @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@unique([planTemplateId, mealTypeId])
+  @@index([businessId, planTemplateId])
+  @@map("plan_template_items")
+}
+
+model Subscription {
+  id                  String                       @id @default(uuid()) @db.Uuid
+  businessId          String                       @map("business_id") @db.Uuid
+  customerId          String                       @map("customer_id") @db.Uuid
+  planTemplateId      String?                      @map("plan_template_id") @db.Uuid
+  type                SubscriptionType
+  status              SubscriptionStatus
+  startDate           DateTime                     @map("start_date") @db.Date
+  endDate             DateTime                     @map("end_date") @db.Date
+  requiredAmountMinor Int?                         @map("required_amount_minor")
+  paidAmountMinor     Int                          @default(0) @map("paid_amount_minor")
+  cancelledAt         DateTime?                    @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason  String?                      @map("cancellation_reason")
+  createdAt           DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime                     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business            Business                     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer            Customer                     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  planTemplate        PlanTemplate?                @relation(fields: [planTemplateId], references: [id], onDelete: Restrict)
+  items               SubscriptionItem[]
+  entitlements        Entitlement[]
+  capacityPeriods     SubscriptionCapacityPeriod[]
+  payments            Payment[]
+  applications        PaymentApplication[]
+
+  @@unique([businessId, id])
+  @@index([businessId, customerId, status])
+  @@index([businessId, startDate, endDate])
+  @@map("subscriptions")
+}
+
+model SubscriptionItem {
+  id              String                       @id @default(uuid()) @db.Uuid
+  businessId      String                       @map("business_id") @db.Uuid
+  subscriptionId  String                       @map("subscription_id") @db.Uuid
+  mealTypeId      String                       @map("meal_type_id") @db.Uuid
+  quantity        Int
+  unitPriceMinor  Int?                         @map("unit_price_minor")
+  subscription    Subscription                 @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  mealType        MealType                     @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+  capacityPeriods SubscriptionCapacityPeriod[]
+
+  @@unique([businessId, id])
+  @@unique([subscriptionId, mealTypeId])
+  @@index([businessId, subscriptionId])
+  @@map("subscription_items")
+}
+
+model Price {
+  id            String    @id @default(uuid()) @db.Uuid
+  businessId    String    @map("business_id") @db.Uuid
+  mealTypeId    String    @map("meal_type_id") @db.Uuid
+  amountMinor   Int       @map("amount_minor")
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  business      Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  mealType      MealType  @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@index([businessId, mealTypeId, effectiveFrom, effectiveTo])
+  @@map("prices")
+}
+
+model Menu {
+  id          String     @id @default(uuid()) @db.Uuid
+  businessId  String     @map("business_id") @db.Uuid
+  menuDate    DateTime   @map("menu_date") @db.Date
+  status      MenuStatus @default(DRAFT)
+  publishedAt DateTime?  @map("published_at") @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business    Business   @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  items       MenuItem[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, menuDate])
+  @@index([businessId, menuDate, status])
+  @@map("menus")
+}
+
+model MenuItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  menuId      String   @map("menu_id") @db.Uuid
+  mealTypeId  String   @map("meal_type_id") @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  menu        Menu     @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  mealType    MealType @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@unique([menuId, mealTypeId])
+  @@index([businessId, menuId])
+  @@map("menu_items")
+}
+
+model Order {
+  id              String      @id @default(uuid()) @db.Uuid
+  businessId      String      @map("business_id") @db.Uuid
+  customerId      String      @map("customer_id") @db.Uuid
+  serviceDate     DateTime    @map("service_date") @db.Date
+  source          OrderSource
+  createdByUserId String?     @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer        Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items           OrderItem[]
+
+  @@unique([businessId, id])
+  @@index([businessId, customerId, serviceDate])
+  @@index([businessId, serviceDate, source])
+  @@map("orders")
+}
+
+model OrderItem {
+  id                   String                @id @default(uuid()) @db.Uuid
+  businessId           String                @map("business_id") @db.Uuid
+  orderId              String                @map("order_id") @db.Uuid
+  customerId           String                @map("customer_id") @db.Uuid
+  serviceDate          DateTime              @map("service_date") @db.Date
+  mealTypeId           String                @map("meal_type_id") @db.Uuid
+  source               OrderSource
+  status               OrderItemStatus       @default(CONFIRMED)
+  quantity             Int
+  allocationKind       AllocationKind        @map("allocation_kind")
+  menuItemNameSnapshot String                @map("menu_item_name_snapshot")
+  unitPriceMinor       Int                   @map("unit_price_minor")
+  orderingCutoffAt     DateTime              @map("ordering_cutoff_at") @db.Timestamptz(6)
+  cancellationCutoffAt DateTime              @map("cancellation_cutoff_at") @db.Timestamptz(6)
+  completedAt          DateTime?             @map("completed_at") @db.Timestamptz(6)
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason   String?               @map("cancellation_reason")
+  replacesOrderItemId  String?               @map("replaces_order_item_id") @db.Uuid
+  business             Business              @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  order                Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  customer             Customer              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  mealType             MealType              @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+  replacementOf        OrderItem?            @relation("OrderItemReplacement", fields: [replacesOrderItemId], references: [id], onDelete: Restrict)
+  replacements         OrderItem[]           @relation("OrderItemReplacement")
+  prepaidReservations  PrepaidReservation[]
+  capacityReservations CapacityReservation[]
+  entitlementEffects   EntitlementEffect[]
+  capacityEffects      CapacityEffect[]
+  charges              Charge[]
+  events               OrderItemEvent[]
+  closureEffects       ClosureEffect[]
+
+  @@unique([businessId, id])
+  @@index([businessId, serviceDate, status])
+  @@index([businessId, cancellationCutoffAt, status])
+  @@index([businessId, customerId, serviceDate, mealTypeId])
+  @@map("order_items")
+}
+
+model Entitlement {
+  id                String               @id @default(uuid()) @db.Uuid
+  businessId        String               @map("business_id") @db.Uuid
+  customerId        String               @map("customer_id") @db.Uuid
+  subscriptionId    String?              @map("subscription_id") @db.Uuid
+  mealTypeId        String               @map("meal_type_id") @db.Uuid
+  issuedQuantity    Int                  @map("issued_quantity")
+  availableQuantity Int                  @map("available_quantity")
+  reservedQuantity  Int                  @default(0) @map("reserved_quantity")
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  business          Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer          Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  subscription      Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  mealType          MealType             @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+  reservations      PrepaidReservation[]
+  effects           EntitlementEffect[]
+
+  @@unique([businessId, id])
+  @@index([businessId, customerId, mealTypeId, createdAt])
+  @@index([businessId, customerId, mealTypeId, availableQuantity])
+  @@map("entitlements")
+}
+
+model PrepaidReservation {
+  id            String              @id @default(uuid()) @db.Uuid
+  businessId    String              @map("business_id") @db.Uuid
+  entitlementId String              @map("entitlement_id") @db.Uuid
+  orderItemId   String              @map("order_item_id") @db.Uuid
+  quantity      Int
+  status        ReservationStatus   @default(RESERVED)
+  reservedAt    DateTime            @default(now()) @map("reserved_at") @db.Timestamptz(6)
+  releasedAt    DateTime?           @map("released_at") @db.Timestamptz(6)
+  consumedAt    DateTime?           @map("consumed_at") @db.Timestamptz(6)
+  entitlement   Entitlement         @relation(fields: [entitlementId], references: [id], onDelete: Restrict)
+  orderItem     OrderItem           @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  effects       EntitlementEffect[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, entitlementId, orderItemId])
+  @@index([businessId, orderItemId, status])
+  @@map("prepaid_reservations")
+}
+
+model EntitlementEffect {
+  id                   String                @id @default(uuid()) @db.Uuid
+  businessId           String                @map("business_id") @db.Uuid
+  entitlementId        String                @map("entitlement_id") @db.Uuid
+  prepaidReservationId String?               @map("prepaid_reservation_id") @db.Uuid
+  orderItemId          String?               @map("order_item_id") @db.Uuid
+  type                 EntitlementEffectType
+  quantity             Int
+  effectKey            String                @map("effect_key")
+  reason               String?
+  createdByUserId      String?               @map("created_by_user_id") @db.Uuid
+  occurredAt           DateTime              @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  entitlement          Entitlement           @relation(fields: [entitlementId], references: [id], onDelete: Restrict)
+  reservation          PrepaidReservation?   @relation(fields: [prepaidReservationId], references: [id], onDelete: Restrict)
+  orderItem            OrderItem?            @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@unique([businessId, effectKey])
+  @@unique([prepaidReservationId, type])
+  @@index([businessId, entitlementId, occurredAt])
+  @@map("entitlement_effects")
+}
+
+model SubscriptionCapacityPeriod {
+  id                 String                @id @default(uuid()) @db.Uuid
+  businessId         String                @map("business_id") @db.Uuid
+  subscriptionId     String                @map("subscription_id") @db.Uuid
+  subscriptionItemId String                @map("subscription_item_id") @db.Uuid
+  mealTypeId         String                @map("meal_type_id") @db.Uuid
+  periodStart        DateTime              @map("period_start") @db.Date
+  periodEnd          DateTime              @map("period_end") @db.Date
+  capacityQuantity   Int                   @map("capacity_quantity")
+  reservedQuantity   Int                   @default(0) @map("reserved_quantity")
+  consumedQuantity   Int                   @default(0) @map("consumed_quantity")
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  subscription       Subscription          @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  subscriptionItem   SubscriptionItem      @relation(fields: [subscriptionItemId], references: [id], onDelete: Restrict)
+  mealType           MealType              @relation(fields: [mealTypeId], references: [id], onDelete: Restrict)
+  reservations       CapacityReservation[]
+  effects            CapacityEffect[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, subscriptionItemId, periodStart])
+  @@index([businessId, subscriptionId, mealTypeId, periodStart, periodEnd])
+  @@map("subscription_capacity_periods")
+}
+
+model CapacityReservation {
+  id               String                     @id @default(uuid()) @db.Uuid
+  businessId       String                     @map("business_id") @db.Uuid
+  capacityPeriodId String                     @map("capacity_period_id") @db.Uuid
+  orderItemId      String                     @map("order_item_id") @db.Uuid
+  quantity         Int
+  status           ReservationStatus          @default(RESERVED)
+  reservedAt       DateTime                   @default(now()) @map("reserved_at") @db.Timestamptz(6)
+  releasedAt       DateTime?                  @map("released_at") @db.Timestamptz(6)
+  consumedAt       DateTime?                  @map("consumed_at") @db.Timestamptz(6)
+  capacityPeriod   SubscriptionCapacityPeriod @relation(fields: [capacityPeriodId], references: [id], onDelete: Restrict)
+  orderItem        OrderItem                  @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  effects          CapacityEffect[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, orderItemId])
+  @@index([businessId, capacityPeriodId, status])
+  @@map("capacity_reservations")
+}
+
+model CapacityEffect {
+  id                    String                     @id @default(uuid()) @db.Uuid
+  businessId            String                     @map("business_id") @db.Uuid
+  capacityReservationId String                     @map("capacity_reservation_id") @db.Uuid
+  capacityPeriodId      String                     @map("capacity_period_id") @db.Uuid
+  orderItemId           String                     @map("order_item_id") @db.Uuid
+  type                  CapacityEffectType
+  quantity              Int
+  effectKey             String                     @map("effect_key")
+  reason                String?
+  createdByUserId       String?                    @map("created_by_user_id") @db.Uuid
+  occurredAt            DateTime                   @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  reservation           CapacityReservation        @relation(fields: [capacityReservationId], references: [id], onDelete: Restrict)
+  capacityPeriod        SubscriptionCapacityPeriod @relation(fields: [capacityPeriodId], references: [id], onDelete: Restrict)
+  orderItem             OrderItem                  @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@unique([businessId, effectKey])
+  @@unique([capacityReservationId, type])
+  @@index([businessId, capacityPeriodId, occurredAt])
+  @@map("capacity_effects")
+}
+
+model OrderItemEvent {
+  id              String    @id @default(uuid()) @db.Uuid
+  businessId      String    @map("business_id") @db.Uuid
+  orderItemId     String    @map("order_item_id") @db.Uuid
+  eventType       String    @map("event_type")
+  effectKey       String    @map("effect_key")
+  reason          String?
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  occurredAt      DateTime  @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  orderItem       OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@unique([businessId, effectKey])
+  @@index([businessId, orderItemId, occurredAt])
+  @@map("order_item_events")
+}
+
+model LedgerEntry {
+  id                    String               @id @default(uuid()) @db.Uuid
+  businessId            String               @map("business_id") @db.Uuid
+  customerId            String               @map("customer_id") @db.Uuid
+  type                  LedgerEntryType
+  amountMinor           Int                  @map("amount_minor")
+  description           String
+  reason                String?
+  reversesLedgerEntryId String?              @map("reverses_ledger_entry_id") @db.Uuid
+  invoiceId             String?              @map("invoice_id") @db.Uuid
+  createdByUserId       String?              @map("created_by_user_id") @db.Uuid
+  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  business              Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer              Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  charge                Charge?              @relation("ChargeLedger")
+  payment               Payment?             @relation("PaymentLedger")
+  adjustment            FinancialAdjustment? @relation("AdjustmentLedger")
+  invoice               Invoice?             @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  reverses              LedgerEntry?         @relation("LedgerReversal", fields: [reversesLedgerEntryId], references: [id], onDelete: Restrict)
+  reversedBy            LedgerEntry[]        @relation("LedgerReversal")
+
+  @@unique([businessId, id])
+  @@index([businessId, customerId, createdAt])
+  @@index([businessId, invoiceId])
+  @@map("ledger_entries")
+}
+
+model Charge {
+  id             String       @id @default(uuid()) @db.Uuid
+  businessId     String       @map("business_id") @db.Uuid
+  customerId     String       @map("customer_id") @db.Uuid
+  orderItemId    String       @map("order_item_id") @db.Uuid
+  quantity       Int
+  unitPriceMinor Int          @map("unit_price_minor")
+  amountMinor    Int          @map("amount_minor")
+  status         ChargeStatus @default(POSTED)
+  chargeDueAt    DateTime     @map("charge_due_at") @db.Timestamptz(6)
+  postedAt       DateTime     @default(now()) @map("posted_at") @db.Timestamptz(6)
+  reversedAt     DateTime?    @map("reversed_at") @db.Timestamptz(6)
+  ledgerEntryId  String       @unique @map("ledger_entry_id") @db.Uuid
+  business       Business     @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  orderItem      OrderItem    @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+  ledgerEntry    LedgerEntry  @relation("ChargeLedger", fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+  invoiceItem    InvoiceItem?
+
+  @@unique([businessId, id])
+  @@unique([businessId, orderItemId])
+  @@index([businessId, customerId, status, chargeDueAt])
+  @@index([businessId, chargeDueAt, status])
+  @@map("charges")
+}
+
+model Payment {
+  id               String               @id @default(uuid()) @db.Uuid
+  businessId       String               @map("business_id") @db.Uuid
+  customerId       String               @map("customer_id") @db.Uuid
+  subscriptionId   String?              @map("subscription_id") @db.Uuid
+  amountMinor      Int                  @map("amount_minor")
+  paymentDate      DateTime             @map("payment_date") @db.Timestamptz(6)
+  method           PaymentMethod
+  reference        String?
+  note             String?
+  recordedByUserId String?              @map("recorded_by_user_id") @db.Uuid
+  ledgerEntryId    String               @unique @map("ledger_entry_id") @db.Uuid
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  business         Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer         Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  subscription     Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  ledgerEntry      LedgerEntry          @relation("PaymentLedger", fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+  applications     PaymentApplication[]
+
+  @@unique([businessId, id])
+  @@index([businessId, customerId, paymentDate])
+  @@map("payments")
+}
+
+model PaymentApplication {
+  id             String        @id @default(uuid()) @db.Uuid
+  businessId     String        @map("business_id") @db.Uuid
+  paymentId      String        @map("payment_id") @db.Uuid
+  customerId     String        @map("customer_id") @db.Uuid
+  subscriptionId String?       @map("subscription_id") @db.Uuid
+  amountMinor    Int           @map("amount_minor")
+  releasedAt     DateTime?     @map("released_at") @db.Timestamptz(6)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  payment        Payment       @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@index([businessId, customerId, subscriptionId])
+  @@map("payment_applications")
+}
+
+model FinancialAdjustment {
+  id              String      @id @default(uuid()) @db.Uuid
+  businessId      String      @map("business_id") @db.Uuid
+  customerId      String      @map("customer_id") @db.Uuid
+  amountMinor     Int         @map("amount_minor")
+  reason          String
+  referenceType   String?     @map("reference_type")
+  referenceId     String?     @map("reference_id")
+  createdByUserId String?     @map("created_by_user_id") @db.Uuid
+  ledgerEntryId   String      @unique @map("ledger_entry_id") @db.Uuid
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  business        Business    @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer        Customer    @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  ledgerEntry     LedgerEntry @relation("AdjustmentLedger", fields: [ledgerEntryId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@index([businessId, customerId, createdAt])
+  @@map("financial_adjustments")
+}
+
+model Invoice {
+  id                   String        @id @default(uuid()) @db.Uuid
+  businessId           String        @map("business_id") @db.Uuid
+  customerId           String        @map("customer_id") @db.Uuid
+  invoiceNumber        String        @map("invoice_number")
+  periodStart          DateTime      @map("period_start") @db.Date
+  periodEnd            DateTime      @map("period_end") @db.Date
+  status               InvoiceStatus @default(DRAFT)
+  subtotalMinor        Int           @map("subtotal_minor")
+  previousBalanceMinor Int           @map("previous_balance_minor")
+  paymentsMinor        Int           @map("payments_minor")
+  creditsMinor         Int           @map("credits_minor")
+  outstandingMinor     Int           @map("outstanding_minor")
+  issuedAt             DateTime?     @map("issued_at") @db.Timestamptz(6)
+  createdByUserId      String?       @map("created_by_user_id") @db.Uuid
+  createdAt            DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  business             Business      @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer             Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items                InvoiceItem[]
+  ledgerEntries        LedgerEntry[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, invoiceNumber])
+  @@index([businessId, customerId, periodStart, periodEnd])
+  @@index([businessId, status, issuedAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id             String  @id @default(uuid()) @db.Uuid
+  businessId     String  @map("business_id") @db.Uuid
+  invoiceId      String  @map("invoice_id") @db.Uuid
+  chargeId       String  @unique @map("charge_id") @db.Uuid
+  orderItemId    String? @map("order_item_id") @db.Uuid
+  description    String
+  mealTypeName   String  @map("meal_type_name")
+  quantity       Int
+  unitPriceMinor Int     @map("unit_price_minor")
+  totalMinor     Int     @map("total_minor")
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  charge         Charge  @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@index([businessId, invoiceId])
+  @@map("invoice_items")
+}
+
+model ClosureDay {
+  id              String          @id @default(uuid()) @db.Uuid
+  businessId      String          @map("business_id") @db.Uuid
+  closureDate     DateTime        @map("closure_date") @db.Date
+  reason          String
+  status          ClosureStatus   @default(DRAFT)
+  processedAt     DateTime?       @map("processed_at") @db.Timestamptz(6)
+  createdByUserId String?         @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  business        Business        @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  effects         ClosureEffect[]
+
+  @@unique([businessId, id])
+  @@unique([businessId, closureDate])
+  @@index([businessId, closureDate, status])
+  @@map("closure_days")
+}
+
+model ClosureEffect {
+  id           String     @id @default(uuid()) @db.Uuid
+  businessId   String     @map("business_id") @db.Uuid
+  closureDayId String     @map("closure_day_id") @db.Uuid
+  orderItemId  String?    @map("order_item_id") @db.Uuid
+  effectKey    String     @map("effect_key")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  closureDay   ClosureDay @relation(fields: [closureDayId], references: [id], onDelete: Restrict)
+  orderItem    OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, id])
+  @@unique([businessId, closureDayId, effectKey])
+  @@index([businessId, closureDayId])
+  @@map("closure_effects")
+}
+
+model IdempotencyKey {
+  id           String            @id @default(uuid()) @db.Uuid
+  businessId   String            @map("business_id") @db.Uuid
+  actorUserId  String?           @map("actor_user_id") @db.Uuid
+  customerId   String?           @map("customer_id") @db.Uuid
+  operation    String
+  key          String
+  status       IdempotencyStatus
+  responseCode Int?              @map("response_code")
+  responseBody Json?             @map("response_body")
+  resourceType String?           @map("resource_type")
+  resourceId   String?           @map("resource_id")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt  DateTime?         @map("completed_at") @db.Timestamptz(6)
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, operation, key])
+  @@index([businessId, createdAt])
+  @@map("idempotency_keys")
+}

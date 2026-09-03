@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { ADMIN_SESSION_COOKIE, createSessionToken, hashToken, requestMetadata, sessionCookieOptions, sessionExpiry } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/auth/password";
+import { initializeDefaultMealTypesInTransaction } from "@/lib/domain/catalog";
 import { apiError, invalidInput } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { initialSetupSchema } from "@/lib/validation/auth";
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
             { businessId: business.id, settingKey: "adjustment_format", settingValue: "ADJ-YYYY-0001" },
           ],
         });
+
+        await initializeDefaultMealTypesInTransaction(tx, business.id, admin.id);
 
         await tx.adminSession.create({
           data: {

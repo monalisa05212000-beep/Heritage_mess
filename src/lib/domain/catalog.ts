@@ -1,10 +1,55 @@
 import { MenuStatus, PrismaClient } from "@prisma/client";
 
-import type { DomainActor } from "@/lib/domain/context";
-import { requireAdmin, writeAudit } from "@/lib/domain/context";
-import { DomainError } from "@/lib/domain/errors";
-import { beginIdempotentOperation, completeIdempotentOperation } from "@/lib/domain/idempotency";
-import { dateOnly } from "@/lib/domain/time";
+import type { DomainActor, DomainTransaction } from "./context";
+import { requireAdmin, writeAudit } from "./context";
+import { DomainError } from "./errors";
+import { beginIdempotentOperation, completeIdempotentOperation } from "./idempotency";
+import { dateOnly } from "./time";
+
+export const DEFAULT_MEAL_TYPES = [
+  { code: "BREAKFAST", name: "Breakfast", sortOrder: 1, orderingCutoffMinutes: 420, cancellationCutoffMinutes: 420 },
+  { code: "LUNCH", name: "Lunch", sortOrder: 2, orderingCutoffMinutes: 660, cancellationCutoffMinutes: 660 },
+  { code: "DINNER", name: "Dinner", sortOrder: 3, orderingCutoffMinutes: 1080, cancellationCutoffMinutes: 1080 },
+] as const;
+
+export async function initializeDefaultMealTypesInTransaction(
+  tx: DomainTransaction,
+  businessId: string,
+  actorUserId?: string,
+) {
+  const actor: DomainActor = { businessId, userId: actorUserId, role: "SYSTEM" };
+  const createdMealTypes = [];
+
+  for (const def of DEFAULT_MEAL_TYPES) {
+    const mealType = await tx.mealType.create({
+      data: {
+        businessId,
+        code: def.code,
+        name: def.name,
+        sortOrder: def.sortOrder,
+        orderingCutoffMinutes: def.orderingCutoffMinutes,
+        cancellationCutoffMinutes: def.cancellationCutoffMinutes,
+        status: "ACTIVE",
+      },
+    });
+    createdMealTypes.push(mealType);
+    await writeAudit(tx, actor, "meal_type", mealType.id, "MEAL_TYPE_CREATED", {
+      code: mealType.code,
+      name: mealType.name,
+      orderingCutoffMinutes: mealType.orderingCutoffMinutes,
+      cancellationCutoffMinutes: mealType.cancellationCutoffMinutes,
+    });
+  }
+
+  return createdMealTypes;
+}
+
+export async function initializeDefaultMealTypes(prisma: PrismaClient, actor: DomainActor) {
+  requireAdmin(actor);
+  return prisma.$transaction(async (tx) => {
+    return initializeDefaultMealTypesInTransaction(tx, actor.businessId, actor.userId);
+  });
+}
 
 type MenuMealInput = { mealTypeId: string; name: string; description?: string };
 
@@ -69,6 +114,17 @@ export async function setFuturePrice(
     if (operation.replay) return operation.replay as { priceId: string };
     const mealType = await tx.mealType.findFirst({ where: { id: input.mealTypeId, businessId: actor.businessId } });
     if (!mealType) throw new DomainError("Meal type was not found.", "NOT_FOUND");
+    const overlapping = await tx.price.findFirst({
+      where: {
+        businessId: actor.businessId,
+        mealTypeId: mealType.id,
+        AND: [
+          { effectiveFrom: { lte: input.effectiveTo ? dateOnly(input.effectiveTo) : new Date("9999-12-31") } },
+          { OR: [{ effectiveTo: null }, { effectiveTo: { gte: dateOnly(input.effectiveFrom) } }] },
+        ],
+      },
+    });
+    if (overlapping) throw new DomainError("An active price already exists for this effective period.", "INVALID_STATE");
     const price = await tx.price.create({ data: { businessId: actor.businessId, mealTypeId: mealType.id, amountMinor: input.amountMinor, effectiveFrom: dateOnly(input.effectiveFrom), effectiveTo: input.effectiveTo ? dateOnly(input.effectiveTo) : null } });
     await writeAudit(tx, actor, "price", price.id, "PRICE_CREATED", { mealTypeId: mealType.id, amountMinor: input.amountMinor, effectiveFrom: price.effectiveFrom.toISOString() });
     const response = { priceId: price.id };

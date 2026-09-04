@@ -6,6 +6,7 @@ import { reserveCountCapacity, reservePrepaidFifo, releaseCountReservations, rel
 import { DomainError } from "@/lib/domain/errors";
 import { createOrderCharge, reverseOrderCharge } from "@/lib/domain/finance";
 import { beginIdempotentOperation, completeIdempotentOperation } from "@/lib/domain/idempotency";
+import { ORDER_TRANSACTION_OPTIONS } from "@/lib/domain/order-transaction";
 import { cutoffAt, dateOnly } from "@/lib/domain/time";
 
 export type CreateOrderInput = { customerId: string; serviceDate: Date; mealTypeId: string; quantity?: number; idempotencyKey: string };
@@ -72,7 +73,7 @@ export async function createOrder(prisma: PrismaClient, actor: DomainActor, inpu
     const response = { orderItemId: item.id };
     await completeIdempotentOperation(tx, actor, "order.create", input.idempotencyKey, "order_item", item.id, response);
     return response;
-  }, { isolationLevel: "Serializable" });
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 export async function cancelOrderItem(
@@ -103,7 +104,7 @@ export async function cancelOrderItem(
     const response = { orderItemId: item.id };
     await completeIdempotentOperation(tx, actor, "order.cancel", idempotencyKey, "order_item", item.id, response);
     return response;
-  }, { isolationLevel: "Serializable" });
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 export async function replaceOrderItem(prisma: PrismaClient, actor: DomainActor, originalOrderItemId: string, replacement: Omit<CreateOrderInput, "customerId" | "idempotencyKey"> & { idempotencyKey: string }) {
@@ -119,7 +120,7 @@ export async function replaceOrderItem(prisma: PrismaClient, actor: DomainActor,
     const response = { originalOrderItemId, replacementOrderItemId: item.id };
     await completeIdempotentOperation(tx, actor, "order.replace", replacement.idempotencyKey, "order_item", item.id, response);
     return response;
-  }, { isolationLevel: "Serializable" });
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 async function cancelOrderItemInTransaction(tx: DomainTransaction, actor: DomainActor, item: { id: string; allocationKind: AllocationKind }, treatment: AdminCancellationTreatment, reason: string) {

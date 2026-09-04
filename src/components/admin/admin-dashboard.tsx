@@ -122,14 +122,15 @@ export function AdminDashboard({
 
   async function createCustomer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const ok = await submitJson("/api/admin/customers", {
       name: String(form.get("name") ?? ""),
       phone: String(form.get("phone") ?? ""),
       payAsYouGoEnabled: form.get("payAsYouGoEnabled") === "on",
       idempotencyKey: crypto.randomUUID(),
     }, "create-customer", "Customer saved.");
-    if (ok) event.currentTarget.reset();
+    if (ok) formElement.reset();
   }
 
   async function savePrice(event: FormEvent<HTMLFormElement>) {

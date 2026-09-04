@@ -10,6 +10,7 @@ type MenuItemView = {
   id: string;
   name: string;
   description: string | null;
+  priceMinor: number | null;
   mealType: { id: string; name: string };
 };
 
@@ -71,6 +72,7 @@ export function CustomerOrderBoard({
                 <div>
                   <p className="font-extrabold">{item.mealType.name}</p>
                   <p className="text-sm font-semibold text-[var(--ink)]">{item.name}</p>
+                  {item.priceMinor !== null ? <p className="mt-1 text-base font-black text-[var(--saffron-deep)]">₹{item.priceMinor / 100}</p> : null}
                   {item.description ? <p className="mt-1 text-sm text-[var(--muted)]">{item.description}</p> : null}
                 </div>
                 <Button

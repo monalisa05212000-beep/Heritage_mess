@@ -6,9 +6,13 @@ import { hashPassword } from "@/lib/auth/password";
 import { initializeDefaultMealTypesInTransaction } from "@/lib/domain/catalog";
 import { apiError, invalidInput } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { initialSetupSchema } from "@/lib/validation/auth";
 
 export async function POST(request: Request) {
+  const limited = await enforceRateLimit(prisma, request, { scope: "setup", limit: 5, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   const parsed = initialSetupSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return invalidInput(parsed.error);
 
@@ -89,4 +93,3 @@ export async function POST(request: Request) {
     return apiError("Initial setup could not be completed. No business or account was created.", 500);
   }
 }
-

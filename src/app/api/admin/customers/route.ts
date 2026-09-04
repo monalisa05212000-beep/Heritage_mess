@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/auth/authorization";
 import { createCustomer } from "@/lib/domain/customers";
 import { domainError, invalidInput } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { adminCreateCustomerSchema } from "@/lib/validation/domain";
 
 export async function GET() {
@@ -32,6 +33,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const limited = await enforceRateLimit(prisma, request, { scope: "admin.customers.write", limit: 60, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   const parsed = adminCreateCustomerSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return invalidInput(parsed.error);
 

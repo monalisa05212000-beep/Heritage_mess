@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { Brand } from "@/components/brand";
+import { CustomerLogoutButton } from "@/components/auth/customer-logout-button";
 import { CustomerOrderBoard } from "@/components/customer/customer-order-board";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getCustomerPrincipal } from "@/lib/auth/session";
@@ -12,12 +13,12 @@ export const dynamic = "force-dynamic";
 export default async function CustomerHomePage() {
   const principal = await getCustomerPrincipal();
   if (!principal) redirect("/customer/access");
+  const today = businessDateKey();
+  const serviceDate = businessDateFromKey(today);
 
   const customer = await prisma.customer.findUnique({ where: { id: principal.customerId }, select: { name: true, business: { select: { name: true } } } });
   if (!customer) redirect("/customer/access");
 
-  const today = businessDateKey();
-  const serviceDate = businessDateFromKey(today);
   const [menu, orders] = await Promise.all([
     prisma.menu.findFirst({
       where: { businessId: principal.businessId, menuDate: serviceDate, status: "PUBLISHED" },
@@ -49,7 +50,10 @@ export default async function CustomerHomePage() {
     <main className="mx-auto min-h-screen max-w-lg px-4 py-6 sm:px-6">
       <header className="flex items-center justify-between gap-3">
         <Brand compact />
-        <StatusPill tone="ready">Account active</StatusPill>
+        <div className="flex items-center gap-2">
+          <StatusPill tone="ready">Account active</StatusPill>
+          <CustomerLogoutButton />
+        </div>
       </header>
       <section className="service-strip paper-panel mt-7 rounded-2xl p-5">
         <p className="utility-type text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--saffron-deep)]">{customer.business.name}</p>

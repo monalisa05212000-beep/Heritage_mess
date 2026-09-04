@@ -5,6 +5,7 @@ import { setFuturePrice } from "@/lib/domain/catalog";
 import { businessDateFromKey } from "@/lib/domain/time";
 import { domainError, invalidInput } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { adminSetPriceSchema } from "@/lib/validation/domain";
 
 export async function GET() {
@@ -26,6 +27,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const limited = await enforceRateLimit(prisma, request, { scope: "admin.prices.write", limit: 60, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   const parsed = adminSetPriceSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return invalidInput(parsed.error);
 

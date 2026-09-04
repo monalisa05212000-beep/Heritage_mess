@@ -266,6 +266,16 @@ model LoginAttempt {
   @@map("login_attempts")
 }
 
+model RateLimitEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  scope      String
+  keyHash    String   @map("key_hash")
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  @@index([scope, keyHash, occurredAt])
+  @@map("rate_limit_events")
+}
+
 model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid
   businessId  String   @map("business_id") @db.Uuid

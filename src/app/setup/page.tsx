@@ -2,14 +2,17 @@ import { redirect } from "next/navigation";
 
 import { Brand } from "@/components/brand";
 import { SetupForm } from "@/components/auth/setup-form";
+import { DatabaseUnavailablePanel } from "@/components/database-unavailable-panel";
 import { hasDatabaseUrl } from "@/lib/env";
-import { isInitialSetupComplete } from "@/lib/setup";
+import { getInitialSetupStatus } from "@/lib/setup";
 
 export const dynamic = "force-dynamic";
 
 export default async function SetupPage() {
   if (!hasDatabaseUrl()) redirect("/preview");
-  if (await isInitialSetupComplete()) redirect("/login");
+  const setupStatus = await getInitialSetupStatus();
+  if (setupStatus.state === "database-unavailable") return <DatabaseUnavailablePanel />;
+  if (setupStatus.state === "complete") redirect("/login");
 
   return (
     <main className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-8 sm:px-6">

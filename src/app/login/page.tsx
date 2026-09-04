@@ -2,15 +2,18 @@ import { redirect } from "next/navigation";
 
 import { Brand } from "@/components/brand";
 import { LoginForm } from "@/components/auth/login-form";
+import { DatabaseUnavailablePanel } from "@/components/database-unavailable-panel";
 import { getAdminPrincipal } from "@/lib/auth/session";
 import { hasDatabaseUrl } from "@/lib/env";
-import { isInitialSetupComplete } from "@/lib/setup";
+import { getInitialSetupStatus } from "@/lib/setup";
 
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
   if (!hasDatabaseUrl()) redirect("/preview");
-  if (!(await isInitialSetupComplete())) redirect("/setup");
+  const setupStatus = await getInitialSetupStatus();
+  if (setupStatus.state === "database-unavailable") return <DatabaseUnavailablePanel />;
+  if (setupStatus.state === "incomplete") redirect("/setup");
   if (await getAdminPrincipal()) redirect("/admin");
 
   return (

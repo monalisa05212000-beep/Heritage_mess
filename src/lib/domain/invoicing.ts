@@ -33,8 +33,12 @@ export async function createDraftInvoice(
     if (!uniqueChargeIds.length) throw new DomainError("At least one charge ID is required.", "VALIDATION");
 
     return prisma.$transaction(async (tx) => {
-        const operation = await beginIdempotentOperation(tx, actor, "invoice.create", input.idempotencyKey);
+    const operation = await beginIdempotentOperation(tx, actor, "invoice.create", input.idempotencyKey);
         if (operation.replay) return operation.replay as CreateInvoiceResult;
+
+        if (input.businessId !== actor.businessId) {
+            throw new DomainError("Invoice business does not match the signed-in admin.", "FORBIDDEN");
+        }
 
         await requireCustomerInBusiness(tx, actor.businessId, input.customerId);
 
@@ -46,6 +50,9 @@ export async function createDraftInvoice(
         }
 
         for (const charge of charges) {
+            if (charge.businessId !== actor.businessId) {
+                throw new DomainError("One or more charges were not found.", "NOT_FOUND");
+            }
             if (charge.status !== ChargeStatus.POSTED) {
                 throw new DomainError("Only posted charges can be invoiced.", "INVALID_STATE");
             }

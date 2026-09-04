@@ -4,9 +4,13 @@ import { requireAdmin } from "@/lib/auth/authorization";
 import { createDraftInvoice } from "@/lib/domain/invoicing";
 import { domainError, invalidInput } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { adminCreateInvoiceSchema } from "@/lib/validation/domain";
 
 export async function POST(request: Request) {
+    const limited = await enforceRateLimit(prisma, request, { scope: "admin.invoices.write", limit: 30, windowMs: 15 * 60 * 1000 });
+    if (limited) return limited;
+
     const parsed = adminCreateInvoiceSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return invalidInput(parsed.error);
 

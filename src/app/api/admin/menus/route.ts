@@ -5,6 +5,7 @@ import { saveMenu } from "@/lib/domain/catalog";
 import { businessDateFromKey, businessDateKey } from "@/lib/domain/time";
 import { domainError, invalidInput } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { adminSaveMenuSchema } from "@/lib/validation/domain";
 
 export async function GET(request: Request) {
@@ -35,6 +36,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const limited = await enforceRateLimit(prisma, request, { scope: "admin.menus.write", limit: 30, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   const parsed = adminSaveMenuSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return invalidInput(parsed.error);
 

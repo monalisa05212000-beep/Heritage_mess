@@ -14,6 +14,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminHomePage() {
   const principal = await getAdminPrincipal();
   if (!principal) redirect("/login");
+  const today = businessDateKey();
+  const serviceDate = businessDateFromKey(today);
 
   const admin = await prisma.user.findUnique({
     where: { id: principal.userId },
@@ -21,8 +23,6 @@ export default async function AdminHomePage() {
   });
   if (!admin) redirect("/login");
 
-  const today = businessDateKey();
-  const serviceDate = businessDateFromKey(today);
   const [mealTypes, menu, customers, orders, prices] = await Promise.all([
     prisma.mealType.findMany({
       where: { businessId: principal.businessId, status: "ACTIVE" },

@@ -62,18 +62,9 @@ export async function getAdminPrincipal(): Promise<AdminPrincipal | null> {
   if (!token) return null;
 
   const session = await prisma.adminSession.findFirst({
-    where: {
-      tokenHash: hashToken(token),
-      expiresAt: { gt: new Date() },
-      invalidatedAt: null,
-      user: { role: UserRole.ADMIN, status: AccountStatus.ACTIVE },
-    },
-    select: {
-      userId: true,
-      user: { select: { businessId: true } },
-    },
+    where: { tokenHash: hashToken(token), expiresAt: { gt: new Date() }, invalidatedAt: null, user: { role: UserRole.ADMIN, status: AccountStatus.ACTIVE } },
+    select: { userId: true, user: { select: { businessId: true } } },
   });
-
   if (!session) return null;
   return { kind: "admin", userId: session.userId, businessId: session.user.businessId };
 }
@@ -83,29 +74,21 @@ export async function getCustomerPrincipal(): Promise<CustomerPrincipal | null> 
   if (!token) return null;
 
   const session = await prisma.customerSession.findFirst({
-    where: {
-      tokenHash: hashToken(token),
-      expiresAt: { gt: new Date() },
-      invalidatedAt: null,
-      customer: { status: AccountStatus.ACTIVE },
-    },
+    where: { tokenHash: hashToken(token), expiresAt: { gt: new Date() }, invalidatedAt: null, customer: { status: AccountStatus.ACTIVE } },
     select: { customerId: true, customer: { select: { businessId: true } } },
   });
-
   if (!session) return null;
-  return {
-    kind: "customer",
-    customerId: session.customerId,
-    businessId: session.customer.businessId,
-  };
+  return { kind: "customer", customerId: session.customerId, businessId: session.customer.businessId };
 }
 
 export async function invalidateAdminSession(token: string | undefined) {
   if (!token) return;
-  await prisma.adminSession.updateMany({
-    where: { tokenHash: hashToken(token), invalidatedAt: null },
-    data: { invalidatedAt: new Date() },
-  });
+  await prisma.adminSession.updateMany({ where: { tokenHash: hashToken(token), invalidatedAt: null }, data: { invalidatedAt: new Date() } });
+}
+
+export async function invalidateCustomerSession(token: string | undefined) {
+  if (!token) return;
+  await prisma.customerSession.updateMany({ where: { tokenHash: hashToken(token), invalidatedAt: null }, data: { invalidatedAt: new Date() } });
 }
 
 export function requestMetadata(request: Request): SessionMetadata {
@@ -116,4 +99,3 @@ export function requestMetadata(request: Request): SessionMetadata {
     userAgent: request.headers.get("user-agent")?.slice(0, 500) ?? null,
   };
 }
-

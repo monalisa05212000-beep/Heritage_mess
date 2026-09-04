@@ -194,7 +194,7 @@ describe("invoice smoke tests", () => {
                 customerId: CUSTOMER_ID,
                 chargeIds: [CHARGE_1],
                 idempotencyKey: "test-key-12349",
-            })).resolves.toBeDefined();
+            })).rejects.toThrow(DomainError);
         });
     });
 

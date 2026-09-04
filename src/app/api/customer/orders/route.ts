@@ -5,6 +5,7 @@ import { createOrder } from "@/lib/domain/orders";
 import { businessDateFromKey } from "@/lib/domain/time";
 import { domainError, invalidInput } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { customerCreateOrderSchema } from "@/lib/validation/domain";
 
 export async function GET() {
@@ -21,6 +22,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const limited = await enforceRateLimit(prisma, request, { scope: "customer.orders.write", limit: 20, windowMs: 15 * 60 * 1000 });
+  if (limited) return limited;
+
   const parsed = customerCreateOrderSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return invalidInput(parsed.error);
 

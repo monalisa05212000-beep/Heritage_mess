@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { AdminDashboard } from "@/components/admin/admin-dashboard";
 import { AppShell } from "@/components/app-shell";
 import { BusinessClock } from "@/components/business-clock";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getAdminPrincipal } from "@/lib/auth/session";
-import { businessDateFromKey, businessDateKey } from "@/lib/domain/time";
+import { addBusinessDays, businessDateFromKey, businessDateKey, formatBusinessDate } from "@/lib/domain/time";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -16,94 +15,25 @@ export default async function AdminHomePage() {
   if (!principal) redirect("/login");
   const today = businessDateKey();
   const serviceDate = businessDateFromKey(today);
-
-  const admin = await prisma.user.findUnique({
-    where: { id: principal.userId },
-    select: { name: true, business: { select: { name: true } } },
-  });
-  if (!admin) redirect("/login");
-
-  const [mealTypes, menu, customers, orders, prices] = await Promise.all([
-    prisma.mealType.findMany({
-      where: { businessId: principal.businessId, status: "ACTIVE" },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true, code: true, name: true },
-    }),
-    prisma.menu.findUnique({
-      where: { businessId_menuDate: { businessId: principal.businessId, menuDate: serviceDate } },
-      select: {
-        id: true,
-        status: true,
-        items: {
-          orderBy: { mealType: { sortOrder: "asc" } },
-          select: { id: true, mealTypeId: true, name: true, description: true, mealType: { select: { id: true, code: true, name: true } } },
-        },
-      },
-    }),
-    prisma.customer.findMany({
-      where: { businessId: principal.businessId },
-      orderBy: [{ status: "asc" }, { name: "asc" }],
-      select: { id: true, name: true, phone: true, status: true, payAsYouGoEnabled: true, _count: { select: { orderItems: true, subscriptions: true } } },
-    }),
-    prisma.orderItem.findMany({
-      where: { businessId: principal.businessId, serviceDate },
-      orderBy: [{ mealType: { sortOrder: "asc" } }, { id: "desc" }],
-      select: {
-        id: true,
-        status: true,
-        quantity: true,
-        allocationKind: true,
-        menuItemNameSnapshot: true,
-        unitPriceMinor: true,
-        customer: { select: { name: true, phone: true } },
-        mealType: { select: { name: true } },
-      },
-    }),
-    prisma.price.findMany({
-      where: { businessId: principal.businessId },
-      orderBy: [{ mealType: { sortOrder: "asc" } }, { effectiveFrom: "desc" }],
-      select: {
-        id: true,
-        mealTypeId: true,
-        amountMinor: true,
-        effectiveFrom: true,
-        effectiveTo: true,
-        mealType: { select: { id: true, code: true, name: true } },
-      },
-    }),
+  const tomorrowKey = addBusinessDays(today, 1);
+  const tomorrow = businessDateFromKey(tomorrowKey);
+  const [admin, menu, tomorrowMenu, mealTypes, orders, cancelledToday, ledger] = await Promise.all([
+    prisma.user.findUnique({ where: { id: principal.userId }, select: { name: true, business: { select: { name: true } } } }),
+    prisma.menu.findUnique({ where: { businessId_menuDate: { businessId: principal.businessId, menuDate: serviceDate } }, select: { status: true, items: { orderBy: { mealType: { sortOrder: "asc" } }, select: { name: true, mealType: { select: { id: true, name: true } } } } } }),
+    prisma.menu.findUnique({ where: { businessId_menuDate: { businessId: principal.businessId, menuDate: tomorrow } }, select: { status: true } }),
+    prisma.mealType.findMany({ where: { businessId: principal.businessId, status: "ACTIVE" }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
+    prisma.orderItem.findMany({ where: { businessId: principal.businessId, serviceDate }, select: { status: true, quantity: true, mealTypeId: true, customer: { select: { name: true } }, mealType: { select: { name: true } } } }),
+    prisma.orderItem.count({ where: { businessId: principal.businessId, serviceDate, status: "CANCELLED" } }),
+    prisma.ledgerEntry.groupBy({ by: ["customerId"], where: { businessId: principal.businessId }, _sum: { amountMinor: true } }),
   ]);
-
-  return (
-    <AppShell businessName={admin.business.name} adminName={admin.name}>
-      <section className="service-strip paper-panel rounded-2xl p-5 sm:p-7">
-        <div className="relative z-10 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="utility-type text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--saffron-deep)]">Today’s service · <BusinessClock /></p>
-            <h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-[var(--ink)] sm:text-4xl">Today’s service board</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-[var(--muted)]">Menus, customers, and orders below are loaded from the production database.</p>
-          </div>
-          <StatusPill tone={menu?.status === "PUBLISHED" ? "ready" : "neutral"}>{menu?.status ?? "No menu"}</StatusPill>
-        </div>
-      </section>
-
-      <section className="mt-6 grid gap-4 sm:grid-cols-3" aria-label="Today’s service summary">
-        {[
-          ["Orders", String(orders.length), "Meals on today’s service date"],
-          ["Customers", String(customers.length), "Database customer records"],
-          ["Meals", String(mealTypes.length), "Active meal types"],
-        ].map(([label, value, hint]) => (
-          <article key={label} className="paper-panel rounded-2xl p-4">
-            <p className="utility-type text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--muted)]">{label}</p>
-            <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
-            <p className="mt-1 text-xs font-medium text-[var(--muted)]">{hint}</p>
-          </article>
-        ))}
-      </section>
-
-      <div className="mt-6"><AdminDashboard serviceDate={today} mealTypes={mealTypes} menu={menu} customers={customers} orders={orders} prices={prices} /></div>
-      <p className="mt-5 text-xs font-semibold text-[var(--muted)]">
-        Business details remain in <Link href="/admin/settings" className="text-[var(--saffron-deep)]">settings</Link>.
-      </p>
-    </AppShell>
-  );
+  if (!admin) redirect("/login");
+  const confirmedCount = (mealTypeId: string) => orders.filter((order) => order.mealTypeId === mealTypeId && order.status === "CONFIRMED").reduce((sum, order) => sum + order.quantity, 0);
+  const unpaid = ledger.filter((entry) => (entry._sum.amountMinor ?? 0) > 0).length;
+  return <AppShell businessName={admin.business.name} adminName={admin.name}><div className="grid gap-5">
+    <section className="service-strip paper-panel rounded-2xl p-5 sm:p-7"><p className="utility-type text-[11px] font-bold uppercase tracking-[.1em] text-[var(--saffron-deep)]">Today · {formatBusinessDate(today, { weekday: "long", day: "numeric", month: "long" })} · <BusinessClock /></p><h1 className="mt-2 text-3xl font-black tracking-tight sm:text-4xl">Today’s service board</h1><p className="mt-2 text-sm text-[var(--muted)]">A single view of today’s kitchen, customers and exceptions.</p></section>
+    <section className="grid gap-3 sm:grid-cols-3">{mealTypes.map((meal) => <article key={meal.id} className="paper-panel rounded-2xl p-5"><p className="utility-type text-[10px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">{meal.name}</p><p className="mt-2 text-3xl font-black">{confirmedCount(meal.id)}</p><p className="mt-1 text-sm text-[var(--muted)]">confirmed meals</p></article>)}</section>
+    <section className="paper-panel rounded-2xl p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="utility-type text-[10px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">Today’s menu</p><h2 className="mt-1 text-2xl font-black">Kitchen menu</h2></div><Link className="text-sm font-bold text-[var(--saffron-deep)]" href={`/admin/menus?date=${today}`}>Manage menu →</Link></div><div className="mt-4 grid gap-3 sm:grid-cols-3">{menu?.items.length ? menu.items.map((item) => <article key={item.mealType.id} className="rounded-xl border border-[var(--line)] bg-white/70 p-4"><p className="text-xs font-bold uppercase text-[var(--muted)]">{item.mealType.name}</p><p className="mt-2 font-black">{item.name}</p></article>) : <p className="text-sm text-[var(--muted)]">No menu has been created for today. <Link href={`/admin/menus?date=${today}`} className="font-bold text-[var(--saffron-deep)]">Create it now.</Link></p>}</div></section>
+    <section className="paper-panel rounded-2xl p-5"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-black">Today’s orders</h2><Link className="text-sm font-bold text-[var(--saffron-deep)]" href={`/admin/orders?date=${today}`}>View orders →</Link></div><div className="mt-4 grid gap-3">{orders.length === 0 ? <p className="text-sm text-[var(--muted)]">No orders have been placed for today.</p> : orders.slice(0, 10).map((order, index) => <div key={`${order.customer.name}-${order.mealType.name}-${index}`} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[var(--line)] p-4"><p className="font-bold">{order.customer.name} · {order.mealType.name} · qty {order.quantity}</p><StatusPill tone={order.status === "CONFIRMED" ? "ready" : "neutral"}>{order.status}</StatusPill></div>)}</div></section>
+    <section className="paper-panel rounded-2xl p-5"><h2 className="text-2xl font-black">Exceptions</h2><div className="mt-4 grid gap-3 sm:grid-cols-3"><p className="rounded-xl border border-[var(--line)] p-4 text-sm">⚠ {cancelledToday} cancellation{cancelledToday === 1 ? "" : "s"} today</p><p className="rounded-xl border border-[var(--line)] p-4 text-sm">⚠ {unpaid} unpaid account{unpaid === 1 ? "" : "s"}</p><p className="rounded-xl border border-[var(--line)] p-4 text-sm">{tomorrowMenu?.status === "PUBLISHED" ? "✓ Tomorrow’s menu is published" : "⚠ Tomorrow’s menu is not published"}</p></div></section>
+  </div></AppShell>;
 }

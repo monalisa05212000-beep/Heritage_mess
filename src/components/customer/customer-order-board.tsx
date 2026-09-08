@@ -43,19 +43,24 @@ export function CustomerOrderBoard({
     setBusyId(busy);
     setMessage(null);
     setError(null);
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setBusyId(null);
-    if (!response.ok) {
-      setError(payload.error ?? "The request could not be completed.");
-      return;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(payload.error ?? "The request could not be completed.");
+        return;
+      }
+      setMessage(success);
+      router.refresh();
+    } catch {
+      setError("Couldn’t reach Heritage Mess. Please try again.");
+    } finally {
+      setBusyId(null);
     }
-    setMessage(success);
-    router.refresh();
   }
 
   return (

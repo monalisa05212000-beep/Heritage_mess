@@ -1,0 +1,15 @@
+import { redirect } from "next/navigation";
+
+import { CustomerShell } from "@/components/customer/customer-shell";
+import { StatusPill } from "@/components/ui/status-pill";
+import { getCustomerPrincipal } from "@/lib/auth/session";
+import { prisma } from "@/lib/prisma";
+
+export const dynamic = "force-dynamic";
+
+export default async function CustomerAccountPage() {
+  const principal = await getCustomerPrincipal(); if (!principal) redirect("/customer/access");
+  const customer = await prisma.customer.findUnique({ where: { id: principal.customerId }, select: { name: true, phone: true, status: true, payAsYouGoEnabled: true, business: { select: { name: true } }, subscriptions: { orderBy: { createdAt: "desc" }, take: 20, select: { id: true, type: true, status: true, startDate: true, endDate: true } }, ledgerEntries: { orderBy: { createdAt: "desc" }, take: 30, select: { id: true, amountMinor: true, description: true, createdAt: true } } } });
+  if (!customer) redirect("/customer/access"); const balanceMinor = customer.ledgerEntries.reduce((sum, entry) => sum + entry.amountMinor, 0);
+  return <CustomerShell businessName={customer.business.name}><div className="grid gap-5"><section className="paper-panel rounded-2xl p-5"><p className="utility-type text-[10px] font-bold uppercase tracking-[.1em] text-[var(--muted)]">Account</p><h1 className="mt-1 text-3xl font-black">{customer.name}</h1><p className="mt-2 text-sm text-[var(--muted)]">{customer.phone}</p><div className="mt-4 flex gap-2"><StatusPill tone="ready">{customer.status}</StatusPill><StatusPill tone={customer.payAsYouGoEnabled ? "ready" : "neutral"}>{customer.payAsYouGoEnabled ? "PAYG enabled" : "PAYG off"}</StatusPill></div></section><section className="paper-panel rounded-2xl p-5"><h2 className="text-xl font-black">Account balance</h2><p className={`mt-2 text-3xl font-black ${balanceMinor > 0 ? "text-[var(--danger)]" : "text-[var(--leaf)]"}`}>₹{balanceMinor / 100}</p><p className="mt-1 text-sm text-[var(--muted)]">Your balance is calculated from charges, payments and credits already recorded by Heritage Mess.</p></section><section className="paper-panel rounded-2xl p-5"><h2 className="text-xl font-black">Subscriptions</h2><div className="mt-4 grid gap-2">{customer.subscriptions.length === 0 ? <p className="text-sm text-[var(--muted)]">No subscriptions on your account.</p> : customer.subscriptions.map((subscription) => <p key={subscription.id} className="rounded-xl border border-[var(--line)] p-3 text-sm"><strong>{subscription.type}</strong> · {subscription.status}</p>)}</div></section><section className="paper-panel rounded-2xl p-5"><h2 className="text-xl font-black">Account activity</h2><div className="mt-4 grid gap-2">{customer.ledgerEntries.length === 0 ? <p className="text-sm text-[var(--muted)]">No account activity yet.</p> : customer.ledgerEntries.map((entry) => <p key={entry.id} className="flex justify-between gap-3 rounded-xl border border-[var(--line)] p-3 text-sm"><span>{entry.description}</span><strong>₹{entry.amountMinor / 100}</strong></p>)}</div></section></div></CustomerShell>;
+}

@@ -79,6 +79,35 @@ export async function updateCustomerPhone(
   });
 }
 
+export async function updateCustomerProfile(
+  prisma: PrismaClient,
+  actor: DomainActor,
+  input: { customerId: string; name?: string; phone?: string; payAsYouGoEnabled?: boolean; idempotencyKey: string },
+) {
+  requireAdmin(actor);
+  return prisma.$transaction(async (tx) => {
+    const operation = await beginIdempotentOperation(tx, actor, "customer.profile.update", input.idempotencyKey);
+    if (operation.replay) return operation.replay as { customerId: string };
+    const customer = await tx.customer.findFirst({ where: { id: input.customerId, businessId: actor.businessId } });
+    if (!customer) throw new DomainError("Customer was not found.", "NOT_FOUND");
+    const name = input.name === undefined ? customer.name : input.name.trim();
+    if (!name) throw new DomainError("A customer name is required.", "VALIDATION");
+    const normalizedPhone = input.phone === undefined ? customer.normalizedPhone : normalizePhone(input.phone);
+    const phone = input.phone === undefined ? customer.phone : input.phone.trim();
+    const duplicate = await tx.customer.findFirst({ where: { businessId: actor.businessId, normalizedPhone, NOT: { id: customer.id } } });
+    if (duplicate) throw new DomainError("That phone number already belongs to another customer.", "CONFLICT");
+    const updated = await tx.customer.update({ where: { id: customer.id }, data: { name, phone, normalizedPhone, payAsYouGoEnabled: input.payAsYouGoEnabled ?? customer.payAsYouGoEnabled } });
+    await writeAudit(tx, actor, "customer", customer.id, "CUSTOMER_UPDATED", {
+      name: updated.name,
+      normalizedPhone: updated.normalizedPhone,
+      payAsYouGoEnabled: updated.payAsYouGoEnabled,
+    });
+    const response = { customerId: customer.id };
+    await completeIdempotentOperation(tx, actor, "customer.profile.update", input.idempotencyKey, "customer", customer.id, response);
+    return response;
+  });
+}
+
 export async function setCustomerServiceAccess(
   prisma: PrismaClient,
   actor: DomainActor,

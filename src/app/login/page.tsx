@@ -10,7 +10,7 @@ import { getInitialSetupStatus } from "@/lib/setup";
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  if (!hasDatabaseUrl()) redirect("/preview");
+  if (!hasDatabaseUrl()) return <DatabaseUnavailablePanel />;
   const setupStatus = await getInitialSetupStatus();
   if (setupStatus.state === "database-unavailable") return <DatabaseUnavailablePanel />;
   if (setupStatus.state === "incomplete") redirect("/setup");

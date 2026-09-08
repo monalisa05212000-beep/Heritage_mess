@@ -19,20 +19,25 @@ export function LoginForm() {
     setErrors({});
     setMessage(null);
     setIsSubmitting(true);
-    const response = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setIsSubmitting(false);
-    if (!response.ok) {
-      setErrors(payload.fieldErrors ?? {});
-      setMessage(payload.error ?? "Sign-in could not be completed. Please try again.");
-      return;
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErrors(payload.fieldErrors ?? {});
+        setMessage(payload.error ?? "Sign-in could not be completed. Please try again.");
+        return;
+      }
+      router.replace("/admin");
+      router.refresh();
+    } catch {
+      setMessage("Couldn’t reach Heritage Mess. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-    router.replace("/admin");
-    router.refresh();
   }
 
   return (

@@ -11,9 +11,13 @@ export function CustomerLogoutButton() {
 
   async function logout() {
     setLoading(true);
-    await fetch("/api/customer-access/logout", { method: "POST" });
-    router.replace("/customer/access");
-    router.refresh();
+    try {
+      await fetch("/api/customer-access/logout", { method: "POST" });
+      router.replace("/customer/access");
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

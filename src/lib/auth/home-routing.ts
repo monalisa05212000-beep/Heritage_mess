@@ -6,7 +6,7 @@ export function homeRoute(input: {
   hasAdminSession: boolean;
   hasCustomerSession: boolean;
 }) {
-  if (!input.databaseConfigured) return "/preview";
+  if (!input.databaseConfigured) return "/login";
   if (input.setupState === "database-unavailable") return "/login";
   if (input.setupState === "incomplete") return "/setup";
   if (input.hasAdminSession) return "/admin";

@@ -4,7 +4,11 @@ import { Brand } from "@/components/brand";
 import { LogoutButton } from "@/components/auth/logout-button";
 
 const navigation = [
-  { href: "/admin", label: "Today" },
+  { href: "/admin", label: "Dashboard" },
+  { href: "/admin/menus", label: "Menus" },
+  { href: "/admin/customers", label: "Customers" },
+  { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/money", label: "Money" },
   { href: "/admin/settings", label: "Settings" },
 ];
 
@@ -36,4 +40,3 @@ export function AppShell({ businessName, adminName, children }: { businessName: 
     </div>
   );
 }
-

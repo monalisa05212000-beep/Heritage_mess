@@ -1,0 +1,7 @@
+// Migration-only schema for initializing a new production database.
+// Runtime Prisma Client continues to use ../schema.prisma.
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PRODUCTION_DATABASE_URL")
+}

@@ -18,19 +18,24 @@ export function BusinessSettingsForm({ business }: { business: BusinessDetails }
     setErrors({});
     setMessage(null);
     setIsSubmitting(true);
-    const response = await fetch("/api/settings/business", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setIsSubmitting(false);
-    if (!response.ok) {
-      setErrors(payload.fieldErrors ?? {});
-      setMessage(payload.error ?? "Business settings could not be saved. No changes were made.");
-      return;
+    try {
+      const response = await fetch("/api/settings/business", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(new FormData(event.currentTarget))),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErrors(payload.fieldErrors ?? {});
+        setMessage(payload.error ?? "Business settings could not be saved. No changes were made.");
+        return;
+      }
+      setMessage("Business settings saved.");
+    } catch {
+      setMessage("Couldn’t reach Heritage Mess. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-    setMessage("Business settings saved.");
   }
 
   return (

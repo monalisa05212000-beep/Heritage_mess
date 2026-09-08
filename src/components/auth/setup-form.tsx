@@ -20,23 +20,26 @@ export function SetupForm() {
     setMessage(null);
     setIsSubmitting(true);
 
-    const values = Object.fromEntries(new FormData(event.currentTarget));
-    const response = await fetch("/api/setup", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(values),
-    });
-    const payload = await response.json().catch(() => ({}));
-    setIsSubmitting(false);
-
-    if (!response.ok) {
-      setErrors(payload.fieldErrors ?? {});
-      setMessage(payload.error ?? "Initial setup could not be completed. No business or account was created.");
-      return;
+    try {
+      const values = Object.fromEntries(new FormData(event.currentTarget));
+      const response = await fetch("/api/setup", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setErrors(payload.fieldErrors ?? {});
+        setMessage(payload.error ?? "Initial setup could not be completed. No business or account was created.");
+        return;
+      }
+      router.replace("/admin");
+      router.refresh();
+    } catch {
+      setMessage("Couldn’t reach Heritage Mess. Please try again.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    router.replace("/admin");
-    router.refresh();
   }
 
   return (

@@ -114,7 +114,7 @@ export async function setFuturePrice(
     if (operation.replay) return operation.replay as { priceId: string };
     const mealType = await tx.mealType.findFirst({ where: { id: input.mealTypeId, businessId: actor.businessId } });
     if (!mealType) throw new DomainError("Meal type was not found.", "NOT_FOUND");
-    const overlapping = await tx.price.findFirst({
+    const overlapping = await tx.price.findMany({
       where: {
         businessId: actor.businessId,
         mealTypeId: mealType.id,
@@ -124,8 +124,17 @@ export async function setFuturePrice(
         ],
       },
     });
-    if (overlapping) throw new DomainError("An active price already exists for this effective period.", "INVALID_STATE");
-    const price = await tx.price.create({ data: { businessId: actor.businessId, mealTypeId: mealType.id, amountMinor: input.amountMinor, effectiveFrom: dateOnly(input.effectiveFrom), effectiveTo: input.effectiveTo ? dateOnly(input.effectiveTo) : null } });
+    const effectiveFrom = dateOnly(input.effectiveFrom);
+    const effectiveTo = input.effectiveTo ? dateOnly(input.effectiveTo) : null;
+    for (const existing of overlapping) {
+      const canCloseOpenEndedCurrent = existing.effectiveTo === null && existing.effectiveFrom < effectiveFrom;
+      if (!canCloseOpenEndedCurrent) throw new DomainError("An active price already exists for this effective period.", "INVALID_STATE");
+      const previousDay = new Date(effectiveFrom);
+      previousDay.setUTCDate(previousDay.getUTCDate() - 1);
+      await tx.price.update({ where: { id: existing.id }, data: { effectiveTo: previousDay } });
+      await writeAudit(tx, actor, "price", existing.id, "PRICE_PERIOD_CLOSED", { effectiveTo: previousDay.toISOString() });
+    }
+    const price = await tx.price.create({ data: { businessId: actor.businessId, mealTypeId: mealType.id, amountMinor: input.amountMinor, effectiveFrom, effectiveTo } });
     await writeAudit(tx, actor, "price", price.id, "PRICE_CREATED", { mealTypeId: mealType.id, amountMinor: input.amountMinor, effectiveFrom: price.effectiveFrom.toISOString() });
     const response = { priceId: price.id };
     await completeIdempotentOperation(tx, actor, "price.set", input.idempotencyKey, "price", price.id, response);

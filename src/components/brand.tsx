@@ -1,15 +1,17 @@
 import Link from "next/link";
+import Image from "next/image";
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" className="inline-flex items-center gap-2.5 text-[var(--ink)] no-underline">
-      <span className="grid h-9 w-9 place-items-center rounded-xl bg-[var(--ink)] text-base font-black text-[var(--paper)]">H</span>
-      {!compact ? (
-        <span className="leading-tight">
-          <span className="block text-sm font-extrabold tracking-tight">Heritage</span>
-          <span className="utility-type block text-[10px] font-semibold uppercase text-[var(--muted)]">Daily service</span>
-        </span>
-      ) : null}
+    <Link href="/" className="inline-flex items-center text-[var(--ink)] no-underline" aria-label="Heritage Home Food">
+      <Image
+        src="/heritage-logo.png"
+        alt="Heritage Home Food"
+        width={compact ? 48 : 168}
+        height={compact ? 48 : 58}
+        className={compact ? "h-10 w-10 object-contain" : "h-12 w-40 object-contain object-left"}
+        priority
+      />
     </Link>
   );
 }

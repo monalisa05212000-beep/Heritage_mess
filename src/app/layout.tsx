@@ -5,6 +5,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Heritage",
   description: "Simple, reliable operations for PG caterers.",
+  icons: { icon: "/heritage-logo.png", apple: "/heritage-logo.png" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

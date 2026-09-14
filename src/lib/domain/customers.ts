@@ -6,6 +6,7 @@ import { DomainError } from "@/lib/domain/errors";
 import { releaseCountReservations, releasePrepaidReservations } from "@/lib/domain/allocations";
 import { reverseOrderCharge } from "@/lib/domain/finance";
 import { beginIdempotentOperation, completeIdempotentOperation } from "@/lib/domain/idempotency";
+import { ORDER_TRANSACTION_OPTIONS } from "@/lib/domain/order-transaction";
 import { dateOnly, normalizePhone } from "@/lib/domain/time";
 
 export type CreateCustomerInput = {
@@ -157,7 +158,9 @@ export async function deactivateCustomerAccess(
     const response = { customerId };
     await completeIdempotentOperation(tx, actor, "customer.deactivate", idempotencyKey, "customer", customerId, response);
     return response;
-  });
+    // Cancelling each order runs several statements per order over the pooled
+    // connection; the default 5s interactive-transaction timeout is not enough.
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 export async function reactivateCustomerAccess(prisma: PrismaClient, actor: DomainActor, customerId: string, idempotencyKey: string) {

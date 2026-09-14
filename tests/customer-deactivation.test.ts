@@ -27,5 +27,10 @@ describe("customer deactivation", () => {
     // serviceDate is a date-only column (UTC midnight); a timestamp `gt` comparison
     // would silently skip today's orders any time after midnight.
     expect(where.serviceDate).toEqual({ gte: dateOnly(new Date()) });
+
+    // The per-order cancellation loop needs more than the default 5s
+    // interactive-transaction timeout on a pooled serverless connection.
+    const options = (prisma.$transaction.mock.calls[0] as unknown[])[1] as { timeout?: number } | undefined;
+    expect(options?.timeout).toBeGreaterThanOrEqual(15_000);
   });
 });

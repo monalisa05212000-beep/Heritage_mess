@@ -6,7 +6,7 @@ import { DomainError } from "@/lib/domain/errors";
 import { releaseCountReservations, releasePrepaidReservations } from "@/lib/domain/allocations";
 import { reverseOrderCharge } from "@/lib/domain/finance";
 import { beginIdempotentOperation, completeIdempotentOperation } from "@/lib/domain/idempotency";
-import { normalizePhone } from "@/lib/domain/time";
+import { dateOnly, normalizePhone } from "@/lib/domain/time";
 
 export type CreateCustomerInput = {
   name: string;
@@ -142,7 +142,7 @@ export async function deactivateCustomerAccess(
     const customer = await tx.customer.findFirst({ where: { id: customerId, businessId: actor.businessId } });
     if (!customer) throw new DomainError("Customer was not found.", "NOT_FOUND");
     const futureOrders = await tx.orderItem.findMany({
-      where: { businessId: actor.businessId, customerId, status: "CONFIRMED", serviceDate: { gt: new Date() } },
+      where: { businessId: actor.businessId, customerId, status: "CONFIRMED", serviceDate: { gte: dateOnly(new Date()) } },
     });
     for (const order of futureOrders) {
       if (order.allocationKind === "PREPAID") await releasePrepaidReservations(tx, actor.businessId, order.id, "CUSTOMER_DEACTIVATED", actor.userId);

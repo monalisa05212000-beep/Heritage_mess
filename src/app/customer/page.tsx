@@ -18,7 +18,7 @@ export default async function CustomerHomePage({ searchParams }: { searchParams:
   const [customer, menu, orders, prices] = await Promise.all([
     prisma.customer.findUnique({ where: { id: principal.customerId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.menu.findFirst({ where: { businessId: principal.businessId, menuDate: date, status: "PUBLISHED" }, select: { items: { orderBy: { mealType: { sortOrder: "asc" } }, select: { id: true, name: true, description: true, mealType: { select: { id: true, name: true } } } } } }),
-    prisma.orderItem.findMany({ where: { businessId: principal.businessId, customerId: principal.customerId }, orderBy: [{ serviceDate: "desc" }, { id: "desc" }], take: 30, select: { id: true, serviceDate: true, status: true, quantity: true, menuItemNameSnapshot: true, unitPriceMinor: true, cancellationCutoffAt: true, mealType: { select: { name: true } } } }),
+    prisma.orderItem.findMany({ where: { businessId: principal.businessId, customerId: principal.customerId }, orderBy: [{ serviceDate: "desc" }, { id: "desc" }], take: 30, select: { id: true, serviceDate: true, status: true, quantity: true, menuItemNameSnapshot: true, unitPriceMinor: true, cancellationCutoffAt: true, mealType: { select: { id: true, name: true } } } }),
     prisma.price.findMany({ where: { businessId: principal.businessId, effectiveFrom: { lte: date }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: date } }] }, orderBy: [{ mealType: { sortOrder: "asc" } }, { effectiveFrom: "desc" }], select: { mealTypeId: true, amountMinor: true } }),
   ]);
   if (!customer) redirect("/customer/access");

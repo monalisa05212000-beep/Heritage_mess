@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { InputField, TextareaField } from "@/components/ui/field";
@@ -24,6 +24,15 @@ function readableDate(date: string) {
 export function MenuManager({ serviceDate, today, mealTypes, menu }: { serviceDate: string; today: string; mealTypes: MealType[]; menu: Menu }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"draft" | "publish" | "unpublish" | null>(null);
+  // Optimistic status: router.refresh() can take seconds, during which the
+  // server-provided menu prop (and its status chip) is stale.
+  const [saved, setSaved] = useState<{ date: string; status: "DRAFT" | "PUBLISHED" | "UNPUBLISHED" } | null>(null);
+  const savedStatus = saved?.date === serviceDate ? saved.status : null;
+  const serverStatus = menu?.status ?? null;
+  useEffect(() => {
+    // Once router.refresh() delivers the server's status, drop the optimistic value.
+    if (serverStatus && savedStatus && serverStatus === savedStatus) setSaved(null);
+  }, [serverStatus, savedStatus]);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const items = useMemo(() => new Map(menu?.items.map((item) => [item.mealTypeId, item]) ?? []), [menu]);
@@ -45,6 +54,7 @@ export function MenuManager({ serviceDate, today, mealTypes, menu }: { serviceDa
         return;
       }
       setMessage(success);
+      setSaved({ date: serviceDate, status: action === "draft" ? "DRAFT" : action === "publish" ? "PUBLISHED" : "UNPUBLISHED" });
       router.refresh();
     } catch {
       setError("Couldn’t reach Heritage Mess. Please try again.");
@@ -55,6 +65,11 @@ export function MenuManager({ serviceDate, today, mealTypes, menu }: { serviceDa
 
   function save(form: HTMLFormElement, publish: boolean) {
     const values = new FormData(form);
+    if (mealTypes.every((mealType) => String(values.get(`dish-${mealType.id}`) ?? "").trim() === "")) {
+      setMessage(null);
+      setError("Enter at least one dish name before saving the menu.");
+      return Promise.resolve();
+    }
     return send("/api/admin/menus", {
       menuDate: serviceDate,
       publish,
@@ -73,7 +88,7 @@ export function MenuManager({ serviceDate, today, mealTypes, menu }: { serviceDa
         <p className="utility-type text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--muted)]">Menu management</p>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl font-black tracking-tight">{readableDate(serviceDate)}</h1>
-          <StatusPill tone={menu?.status === "PUBLISHED" ? "ready" : "neutral"}>{menu?.status ?? "Not created"}</StatusPill>
+          <StatusPill tone={(savedStatus ?? menu?.status) === "PUBLISHED" ? "ready" : "neutral"}>{savedStatus ?? menu?.status ?? "Not created"}</StatusPill>
         </div>
         <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="Choose service date">
           {serviceDays.map((date) => (

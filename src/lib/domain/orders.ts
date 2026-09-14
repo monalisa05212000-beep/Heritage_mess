@@ -1,4 +1,4 @@
-import { AccountStatus, AllocationKind, OrderItemStatus, OrderSource, PrismaClient, SubscriptionStatus, SubscriptionType } from "@prisma/client";
+import { AccountStatus, AllocationKind, OrderItemStatus, OrderSource, Prisma, PrismaClient, SubscriptionStatus, SubscriptionType } from "@prisma/client";
 
 import type { DomainActor, DomainTransaction } from "@/lib/domain/context";
 import { requireAdmin, requireCustomerAccess, requireCustomerInBusiness, writeAudit } from "@/lib/domain/context";
@@ -54,6 +54,13 @@ async function createOrderInTransaction(tx: DomainTransaction, actor: DomainActo
   const order = await tx.order.create({ data: { businessId: actor.businessId, customerId: input.customerId, serviceDate, source, createdByUserId: actor.userId } });
   const item = await tx.orderItem.create({
     data: { businessId: actor.businessId, orderId: order.id, customerId: input.customerId, serviceDate, mealTypeId: meal.id, source, quantity, allocationKind, menuItemNameSnapshot: menuItem.name, unitPriceMinor: price.amountMinor, orderingCutoffAt, cancellationCutoffAt, replacesOrderItemId },
+  }).catch((error: unknown) => {
+    // The order_items_one_active_meal_per_customer_date partial unique index
+    // rejects a second CONFIRMED order for the same meal and date (P2002).
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw new DomainError("A confirmed order for this meal already exists for this date.", "CONFLICT");
+    }
+    throw error;
   });
   if (allocationKind === AllocationKind.PREPAID) await reservePrepaidFifo(tx, { businessId: actor.businessId, customerId: input.customerId, mealTypeId: meal.id, orderItemId: item.id, serviceDate, quantity, actorUserId: actor.userId });
   if (allocationKind === AllocationKind.COUNT) await reserveCountCapacity(tx, { businessId: actor.businessId, customerId: input.customerId, mealTypeId: meal.id, orderItemId: item.id, serviceDate, quantity, actorUserId: actor.userId });

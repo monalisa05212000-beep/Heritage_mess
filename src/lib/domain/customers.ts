@@ -6,7 +6,8 @@ import { DomainError } from "@/lib/domain/errors";
 import { releaseCountReservations, releasePrepaidReservations } from "@/lib/domain/allocations";
 import { reverseOrderCharge } from "@/lib/domain/finance";
 import { beginIdempotentOperation, completeIdempotentOperation } from "@/lib/domain/idempotency";
-import { normalizePhone } from "@/lib/domain/time";
+import { ORDER_TRANSACTION_OPTIONS } from "@/lib/domain/order-transaction";
+import { dateOnly, normalizePhone } from "@/lib/domain/time";
 
 export type CreateCustomerInput = {
   name: string;
@@ -142,7 +143,7 @@ export async function deactivateCustomerAccess(
     const customer = await tx.customer.findFirst({ where: { id: customerId, businessId: actor.businessId } });
     if (!customer) throw new DomainError("Customer was not found.", "NOT_FOUND");
     const futureOrders = await tx.orderItem.findMany({
-      where: { businessId: actor.businessId, customerId, status: "CONFIRMED", serviceDate: { gt: new Date() } },
+      where: { businessId: actor.businessId, customerId, status: "CONFIRMED", serviceDate: { gte: dateOnly(new Date()) } },
     });
     for (const order of futureOrders) {
       if (order.allocationKind === "PREPAID") await releasePrepaidReservations(tx, actor.businessId, order.id, "CUSTOMER_DEACTIVATED", actor.userId);
@@ -157,7 +158,9 @@ export async function deactivateCustomerAccess(
     const response = { customerId };
     await completeIdempotentOperation(tx, actor, "customer.deactivate", idempotencyKey, "customer", customerId, response);
     return response;
-  });
+    // Cancelling each order runs several statements per order over the pooled
+    // connection; the default 5s interactive-transaction timeout is not enough.
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 export async function reactivateCustomerAccess(prisma: PrismaClient, actor: DomainActor, customerId: string, idempotencyKey: string) {

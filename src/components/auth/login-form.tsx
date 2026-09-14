@@ -29,13 +29,18 @@ export function LoginForm() {
       if (!response.ok) {
         setErrors(payload.fieldErrors ?? {});
         setMessage(payload.error ?? "Sign-in could not be completed. Please try again.");
+        setIsSubmitting(false);
         return;
       }
+      // Keep the submitting state on: navigation to /admin renders the
+      // dashboard on the server and can take many seconds on a cold start.
       router.replace("/admin");
       router.refresh();
+      // Safety valve: if navigation silently bounces back to /login the form
+      // stays mounted — re-enable the button so the user can retry.
+      setTimeout(() => setIsSubmitting(false), 30_000);
     } catch {
       setMessage("Couldn’t reach Heritage Mess. Please try again.");
-    } finally {
       setIsSubmitting(false);
     }
   }

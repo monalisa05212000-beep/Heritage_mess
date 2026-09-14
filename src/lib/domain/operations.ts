@@ -6,6 +6,7 @@ import { consumeReservations, releaseCountReservations, releasePrepaidReservatio
 import { DomainError } from "@/lib/domain/errors";
 import { createOrderCharge, reverseOrderCharge } from "@/lib/domain/finance";
 import { beginIdempotentOperation, completeIdempotentOperation } from "@/lib/domain/idempotency";
+import { ORDER_TRANSACTION_OPTIONS } from "@/lib/domain/order-transaction";
 import { dateOnly } from "@/lib/domain/time";
 
 export async function processClosure(
@@ -46,7 +47,7 @@ export async function processClosure(
     const response = { closureId: closure.id, affectedOrders: items.length };
     await completeIdempotentOperation(tx, actor, "closure.process", input.idempotencyKey, "closure_day", closure.id, response);
     return response;
-  }, { isolationLevel: "Serializable" });
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 export async function processCountChargesDue(prisma: PrismaClient, actor: DomainActor, asOf = new Date()) {
@@ -60,7 +61,7 @@ export async function processCountChargesDue(prisma: PrismaClient, actor: Domain
       await tx.orderItemEvent.createMany({ data: [{ businessId: actor.businessId, orderItemId: item.id, eventType: "COUNT_CHARGE_POSTED", effectKey: `order-item:${item.id}:count-charge-posted`, createdByUserId: actor.userId }], skipDuplicates: true });
     }
     return { chargedOrderItems: due.length };
-  }, { isolationLevel: "Serializable" });
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 export async function fulfilPastOrders(prisma: PrismaClient, actor: DomainActor, asOf = new Date()) {
@@ -74,7 +75,7 @@ export async function fulfilPastOrders(prisma: PrismaClient, actor: DomainActor,
       await tx.orderItemEvent.create({ data: { businessId: actor.businessId, orderItemId: item.id, eventType: "ORDER_FULFILLED", effectKey: `order-item:${item.id}:fulfilled`, createdByUserId: actor.userId } });
     }
     return { fulfilledOrderItems: due.length };
-  }, { isolationLevel: "Serializable" });
+  }, ORDER_TRANSACTION_OPTIONS);
 }
 
 export async function issueInvoice(
@@ -119,5 +120,5 @@ export async function issueInvoice(
     const response = { invoiceId: invoice.id };
     await completeIdempotentOperation(tx, actor, "invoice.issue", input.idempotencyKey, "invoice", invoice.id, response);
     return response;
-  }, { isolationLevel: "Serializable" });
+  }, ORDER_TRANSACTION_OPTIONS);
 }

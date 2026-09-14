@@ -22,8 +22,12 @@ type OrderView = {
   menuItemNameSnapshot: string;
   unitPriceMinor: number;
   cancellationCutoffAt: Date | string;
-  mealType: { name: string };
+  mealType: { id: string; name: string };
 };
+
+function dateKey(value: Date | string) {
+  return new Date(value).toISOString().slice(0, 10);
+}
 
 export function CustomerOrderBoard({
   serviceDate,
@@ -38,6 +42,15 @@ export function CustomerOrderBoard({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Optimistic: router.refresh() takes seconds; track successful orders locally
+  // so the button flips to "Ordered" immediately.
+  const [justOrdered, setJustOrdered] = useState<string[]>([]);
+  const [cancelledOrderIds, setCancelledOrderIds] = useState<string[]>([]);
+  const effectiveStatus = (order: OrderView) => (cancelledOrderIds.includes(order.id) ? "CANCELLED" : order.status);
+  const orderedMealTypeIds = new Set([
+    ...orders.filter((order) => effectiveStatus(order) === "CONFIRMED" && dateKey(order.serviceDate) === serviceDate).map((order) => order.mealType.id),
+    ...justOrdered,
+  ]);
 
   async function submit(url: string, body: unknown, busy: string, success: string) {
     setBusyId(busy);
@@ -56,11 +69,13 @@ export function CustomerOrderBoard({
       }
       setMessage(success);
       router.refresh();
+      return true;
     } catch {
       setError("Couldn’t reach Heritage Mess. Please try again.");
     } finally {
       setBusyId(null);
     }
+    return false;
   }
 
   return (
@@ -81,15 +96,18 @@ export function CustomerOrderBoard({
                   {item.description ? <p className="mt-1 text-sm text-[var(--muted)]">{item.description}</p> : null}
                 </div>
                 <Button
-                  disabled={busyId !== null}
-                  onClick={() => submit("/api/customer/orders", {
-                    mealTypeId: item.mealType.id,
-                    serviceDate,
-                    quantity: 1,
-                    idempotencyKey: crypto.randomUUID(),
-                  }, `order-${item.id}`, "Order placed.")}
+                  disabled={busyId !== null || orderedMealTypeIds.has(item.mealType.id)}
+                  onClick={async () => {
+                    const ok = await submit("/api/customer/orders", {
+                      mealTypeId: item.mealType.id,
+                      serviceDate,
+                      quantity: 1,
+                      idempotencyKey: crypto.randomUUID(),
+                    }, `order-${item.id}`, "Order placed.");
+                    if (ok) setJustOrdered((previous) => [...previous, item.mealType.id]);
+                  }}
                 >
-                  {busyId === `order-${item.id}` ? "Ordering…" : "Order"}
+                  {orderedMealTypeIds.has(item.mealType.id) ? "Ordered" : busyId === `order-${item.id}` ? "Ordering…" : "Order"}
                 </Button>
               </div>
             </article>
@@ -107,17 +125,23 @@ export function CustomerOrderBoard({
                   <p className="font-extrabold">{order.mealType.name} · {new Date(order.serviceDate).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}</p>
                   <p className="text-sm text-[var(--muted)]">{order.menuItemNameSnapshot} · qty {order.quantity} · ₹{order.unitPriceMinor / 100}</p>
                 </div>
-                <StatusPill tone={order.status === "CONFIRMED" ? "ready" : "neutral"}>{order.status}</StatusPill>
+                <StatusPill tone={effectiveStatus(order) === "CONFIRMED" ? "ready" : "neutral"}>{effectiveStatus(order)}</StatusPill>
               </div>
-              {order.status === "CONFIRMED" ? (
+              {effectiveStatus(order) === "CONFIRMED" ? (
                 <Button
                   variant="secondary"
                   className="mt-3 min-h-10 px-3 text-xs"
                   disabled={busyId !== null}
-                  onClick={() => submit("/api/customer/orders/cancel", {
-                    orderItemId: order.id,
-                    idempotencyKey: crypto.randomUUID(),
-                  }, `cancel-${order.id}`, "Order cancelled.")}
+                  onClick={async () => {
+                    const ok = await submit("/api/customer/orders/cancel", {
+                      orderItemId: order.id,
+                      idempotencyKey: crypto.randomUUID(),
+                    }, `cancel-${order.id}`, "Order cancelled.");
+                    if (ok) {
+                      setCancelledOrderIds((previous) => [...previous, order.id]);
+                      setJustOrdered((previous) => previous.filter((id) => id !== order.mealType.id));
+                    }
+                  }}
                 >
                   {busyId === `cancel-${order.id}` ? "Cancelling…" : "Cancel order"}
                 </Button>

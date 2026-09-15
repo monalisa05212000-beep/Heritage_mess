@@ -121,12 +121,12 @@ export function CustomerOrderBoard({
             <p className="text-sm text-[var(--muted)]">You haven&rsquo;t ordered anything for {serviceDateLabel} yet.</p>
           ) : orders.map((order) => (
             <article key={order.id} className="rounded-xl border border-[var(--line)] bg-white/70 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 break-words">
                   <p className="font-extrabold">{order.mealType.name}</p>
                   <p className="text-sm text-[var(--muted)]">{order.menuItemNameSnapshot} &middot; qty {order.quantity} &middot; {formatMoney(order.unitPriceMinor * order.quantity)}</p>
                 </div>
-                <StatusPill tone={isCancelled(order) ? "neutral" : "ready"}>{isCancelled(order) ? "CANCELLED" : order.status}</StatusPill>
+                <span className="shrink-0"><StatusPill tone={isCancelled(order) ? "neutral" : "ready"}>{isCancelled(order) ? "Cancelled" : "Confirmed"}</StatusPill></span>
               </div>
               {order.status === "CONFIRMED" && !cancelledOrderIds.includes(order.id) ? (
                 <CancelOrderButton

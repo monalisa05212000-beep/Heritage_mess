@@ -30,3 +30,11 @@ const LEDGER_WORDING: Record<string, string> = {
 export function describeLedgerEntry(description: string) {
   return LEDGER_WORDING[description] ?? description;
 }
+
+/** Order statuses are shouted enum names in the database; customers get words. */
+export const ORDER_STATUS_WORDING: Record<string, string> = {
+  CONFIRMED: "Confirmed",
+  CANCELLED: "Cancelled",
+  COMPLETED: "Served",
+  VOIDED: "Voided",
+};

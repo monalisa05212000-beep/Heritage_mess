@@ -3,7 +3,7 @@ import Image from "next/image";
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
-    <Link href="/" className="inline-flex items-center text-[var(--ink)] no-underline" aria-label="Heritage Home Food">
+    <Link href="/" className="inline-flex min-h-11 items-center text-[var(--ink)] no-underline" aria-label="Heritage Home Food">
       <Image
         src="/heritage-logo.png"
         alt="Heritage Home Food"

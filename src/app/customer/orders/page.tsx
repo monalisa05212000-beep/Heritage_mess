@@ -4,7 +4,7 @@ import { CancelOrderButton } from "@/components/customer/cancel-order-button";
 import { CustomerShell } from "@/components/customer/customer-shell";
 import { StatusPill } from "@/components/ui/status-pill";
 import { getCustomerPrincipal } from "@/lib/auth/session";
-import { formatMoney, formatServiceDate } from "@/lib/format";
+import { ORDER_STATUS_WORDING, formatMoney, formatServiceDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -27,12 +27,12 @@ export default async function CustomerOrdersPage() {
       <div className="mt-5 grid gap-3">
         {orders.length === 0 ? <p className="text-sm text-[var(--muted)]">You have not ordered any meals yet.</p> : orders.map((order) => (
           <article key={order.id} className="rounded-xl border border-[var(--line)] p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 break-words">
                 <p className="font-extrabold">{formatServiceDate(order.serviceDate)} &middot; {order.mealType.name}</p>
                 <p className="mt-1 text-sm text-[var(--muted)]">{order.menuItemNameSnapshot} &middot; qty {order.quantity} &middot; {formatMoney(order.unitPriceMinor * order.quantity)}</p>
               </div>
-              <StatusPill tone={order.status === "CONFIRMED" ? "ready" : "neutral"}>{order.status}</StatusPill>
+              <span className="shrink-0"><StatusPill tone={order.status === "CONFIRMED" ? "ready" : "neutral"}>{ORDER_STATUS_WORDING[order.status] ?? order.status}</StatusPill></span>
             </div>
             {order.status === "CONFIRMED" ? (
               <CancelOrderButton orderItemId={order.id} cancellationCutoffAt={order.cancellationCutoffAt} cutoffPassed={now >= order.cancellationCutoffAt} />

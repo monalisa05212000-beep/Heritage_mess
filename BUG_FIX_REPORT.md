@@ -97,7 +97,7 @@ customer interface of UI and everything else."*
 Reproduced against production before changing anything. The portal matched the customer's name
 **case-sensitively** and their phone number **as an exact string**:
 
-| Typed into the portal | Before | After |
+| Typed into the portal | Before (measured on production) | After (unit-tested; production re-run pending merge) |
 |---|---|---|
 | `E2E Test Customer` + `9000000001` | 200 | 200 |
 | `e2e test customer` | **401** | 200 |
@@ -155,4 +155,7 @@ generated. That finding is the reason this addendum documents a vulnerability th
 
 - **72 tests pass** (was 61 — 11 new covering the matching matrix, the wildcard payloads, the
   ambiguity guard and money formatting), `tsc --noEmit` clean, `next build` clean.
-- Production sign-in matrix re-run after deploy — see the table above.
+- **Production sign-in matrix NOT yet re-run.** PR #2 is not merged, and the Vercel preview is
+  behind deployment protection, so the "After" column above is what the unit tests assert, not a
+  live measurement. Production was re-checked at 23:50 IST and still returns 401 for a lowercase
+  name. The matrix will be re-run against production once PR #2 merges.

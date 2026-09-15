@@ -15,7 +15,7 @@ export default async function CustomerHomePage({ searchParams }: { searchParams:
   const queryDate = (await searchParams).date;
   const serviceDate = typeof queryDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(queryDate) && queryDate >= today ? queryDate : today;
   const date = businessDateFromKey(serviceDate);
-  const [customer, menu, orders, prices] = await Promise.all([
+  const [customer, menu, orders, prices] = await prisma.$transaction([
     prisma.customer.findUnique({ where: { id: principal.customerId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.menu.findFirst({ where: { businessId: principal.businessId, menuDate: date, status: "PUBLISHED" }, select: { items: { orderBy: { mealType: { sortOrder: "asc" } }, select: { id: true, name: true, description: true, mealType: { select: { id: true, name: true } } } } } }),
     prisma.orderItem.findMany({ where: { businessId: principal.businessId, customerId: principal.customerId }, orderBy: [{ serviceDate: "desc" }, { id: "desc" }], take: 30, select: { id: true, serviceDate: true, status: true, quantity: true, menuItemNameSnapshot: true, unitPriceMinor: true, cancellationCutoffAt: true, mealType: { select: { id: true, name: true } } } }),

@@ -13,7 +13,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ custo
   const principal = await getAdminPrincipal();
   if (!principal) redirect("/login");
   const { customerId } = await params;
-  const [admin, customer] = await Promise.all([
+  const [admin, customer] = await prisma.$transaction([
     prisma.user.findUnique({ where: { id: principal.userId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.customer.findFirst({ where: { id: customerId, businessId: principal.businessId }, select: { id: true, name: true, phone: true, status: true, payAsYouGoEnabled: true, orderItems: { orderBy: [{ serviceDate: "desc" }, { id: "desc" }], take: 20, select: { id: true, serviceDate: true, status: true, quantity: true, menuItemNameSnapshot: true, unitPriceMinor: true, mealType: { select: { name: true } } } }, subscriptions: { orderBy: { createdAt: "desc" }, take: 10, select: { id: true, type: true, status: true, startDate: true, endDate: true } }, ledgerEntries: { orderBy: { createdAt: "desc" }, take: 20, select: { id: true, type: true, amountMinor: true, description: true, createdAt: true } } } }),
   ]);

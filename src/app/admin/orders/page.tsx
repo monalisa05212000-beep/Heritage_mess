@@ -13,7 +13,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
   const requested = (await searchParams).date;
   const serviceDate = typeof requested === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : businessDateKey();
   const date = businessDateFromKey(serviceDate);
-  const [admin, mealTypes, customers, orders] = await Promise.all([
+  const [admin, mealTypes, customers, orders] = await prisma.$transaction([
     prisma.user.findUnique({ where: { id: principal.userId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.mealType.findMany({ where: { businessId: principal.businessId, status: "ACTIVE" }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
     prisma.customer.findMany({ where: { businessId: principal.businessId }, orderBy: { name: "asc" }, select: { id: true, name: true, phone: true, status: true } }),

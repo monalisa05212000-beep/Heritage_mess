@@ -14,7 +14,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
   if (!principal) redirect("/login");
   const query = (await searchParams).q;
   const search = typeof query === "string" ? query.trim() : "";
-  const [admin, customers] = await Promise.all([
+  const [admin, customers] = await prisma.$transaction([
     prisma.user.findUnique({ where: { id: principal.userId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.customer.findMany({
       where: { businessId: principal.businessId, ...(search ? { OR: [{ name: { contains: search, mode: "insensitive" } }, { phone: { contains: search } }] } : {}) },

@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CustomerOrdersPage() {
   const principal = await getCustomerPrincipal(); if (!principal) redirect("/customer/access");
-  const [customer, orders] = await Promise.all([
+  const [customer, orders] = await prisma.$transaction([
     prisma.customer.findUnique({ where: { id: principal.customerId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.orderItem.findMany({ where: { businessId: principal.businessId, customerId: principal.customerId }, orderBy: [{ serviceDate: "desc" }, { id: "desc" }], take: 100, select: { id: true, serviceDate: true, status: true, quantity: true, menuItemNameSnapshot: true, unitPriceMinor: true, mealType: { select: { name: true } } } }),
   ]); if (!customer) redirect("/customer/access");

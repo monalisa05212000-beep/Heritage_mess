@@ -15,7 +15,7 @@ export default async function MenusPage({ searchParams }: { searchParams: Promis
   const requested = (await searchParams).date;
   const serviceDate = typeof requested === "string" && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today;
   const menuDate = businessDateFromKey(serviceDate);
-  const [admin, mealTypes, menu] = await Promise.all([
+  const [admin, mealTypes, menu] = await prisma.$transaction([
     prisma.user.findUnique({ where: { id: principal.userId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.mealType.findMany({ where: { businessId: principal.businessId, status: "ACTIVE" }, orderBy: { sortOrder: "asc" }, select: { id: true, code: true, name: true } }),
     prisma.menu.findUnique({ where: { businessId_menuDate: { businessId: principal.businessId, menuDate } }, select: { id: true, status: true, items: { orderBy: { mealType: { sortOrder: "asc" } }, select: { id: true, mealTypeId: true, name: true, description: true, mealType: { select: { id: true, code: true, name: true } } } } } }),

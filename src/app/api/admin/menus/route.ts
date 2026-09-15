@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const date = url.searchParams.get("date") ?? businessDateKey();
     const menuDate = businessDateFromKey(date);
-    const [mealTypes, menu] = await Promise.all([
+    const [mealTypes, menu] = await prisma.$transaction([
       prisma.mealType.findMany({
         where: { businessId: principal.businessId, status: "ACTIVE" },
         orderBy: { sortOrder: "asc" },

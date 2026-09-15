@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function MoneyPage() {
   const principal = await getAdminPrincipal(); if (!principal) redirect("/login");
   const today = businessDateKey(); const currentDate = businessDateFromKey(today);
-  const [admin, mealTypes, prices, rawCustomers] = await Promise.all([
+  const [admin, mealTypes, prices, rawCustomers] = await prisma.$transaction([
     prisma.user.findUnique({ where: { id: principal.userId }, select: { name: true, business: { select: { name: true } } } }),
     prisma.mealType.findMany({ where: { businessId: principal.businessId, status: "ACTIVE" }, orderBy: { sortOrder: "asc" }, select: { id: true, name: true } }),
     prisma.price.findMany({ where: { businessId: principal.businessId }, orderBy: [{ mealType: { sortOrder: "asc" } }, { effectiveFrom: "asc" }], select: { id: true, amountMinor: true, effectiveFrom: true, effectiveTo: true, mealType: { select: { name: true } } } }),

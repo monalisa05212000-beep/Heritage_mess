@@ -2,7 +2,14 @@
 
 **Date:** 15 September 2026 · **Deployment:** https://heritage-mess-lhu5.vercel.app · **Basis:** full code review, two rounds of automated browser testing against the live deployment ([E2E_TEST_REPORT.md](E2E_TEST_REPORT.md)), and post-fix verification ([BUG_FIX_REPORT.md](BUG_FIX_REPORT.md)).
 
-## Verdict: READY TO SHIP — after one action (rotate the admin password)
+## Verdict: READY TO SHIP — after two actions (merge PR #2, rotate the admin password)
+
+> **Updated 15 September 2026, evening.** The assessment below covered the admin side, which the
+> owner has signed off. A later pass over the **customer portal** found that customers could not
+> sign in at all unless they reproduced the admin's exact capitalisation and phone formatting —
+> see [BUG_FIX_REPORT.md](BUG_FIX_REPORT.md) addendum "Customer portal fixes". That work is fixed
+> and tested on `fix/customer-portal-usability` (PR #2) but **is not yet on production**. The
+> portal is not usable by real customers until that merges.
 
 ## What is verified working in production
 
@@ -20,7 +27,8 @@ Engineering quality is solid: immutable financial ledger, idempotency keys on ev
 
 | # | Action | Why | Effort |
 |---|---|---|---|
-| 1 | **Rotate the admin password** | Credentials were briefly committed to the public repo on 15 Sept. History was purged the same night, but orphaned commits can remain fetchable on GitHub until garbage collection. | ~1 minute |
+| 1 | **Merge PR #2** | Until it ships, no customer can sign in to the portal unless they type their name with the admin's exact capitalisation and their phone in the exact stored format. It also closes a sign-in bypass and fixes rate limits that throttled a whole building sharing one WiFi address. | ~1 minute |
+| 2 | **Rotate the admin password** | Credentials were briefly committed to the public repo on 15 Sept. History was purged the same night, but orphaned commits can remain fetchable on GitHub until garbage collection. | ~1 minute |
 
 ## Known limitations (acceptable at current scale, plan for them)
 
@@ -41,7 +49,8 @@ Engineering quality is solid: immutable financial ledger, idempotency keys on ev
 
 ## Launch-day checklist for the operator
 
-1. Rotate the admin password (see above).
+1. Merge PR #2 and confirm the customer portal sign-in works (see above).
+2. Rotate the admin password (see above).
 2. Create real menus for the first service dates and publish after review.
 3. Decide on the 21 Sept Lunch price (keep ₹87 or re-schedule ₹90).
 4. Follow the manual's daily operating checklist (§11).

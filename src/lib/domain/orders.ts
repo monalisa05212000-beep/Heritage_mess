@@ -12,7 +12,7 @@ import { cutoffAt, dateOnly } from "@/lib/domain/time";
 export type CreateOrderInput = { customerId: string; serviceDate: Date; mealTypeId: string; quantity?: number; idempotencyKey: string };
 export type AdminCancellationTreatment = { prepaid: "RESTORE" | "KEEP"; charge: "REVERSE" | "KEEP" };
 
-async function coverageFor(tx: DomainTransaction, businessId: string, customerId: string, mealTypeId: string, serviceDate: Date, quantity: number) {
+async function coverageFor(tx: DomainTransaction, businessId: string, customerId: string, mealTypeId: string, serviceDate: Date, quantity: number, payAsYouGoEnabled: boolean) {
   const prepaid = await tx.entitlement.aggregate({
     where: {
       businessId, customerId, mealTypeId, availableQuantity: { gt: 0 },
@@ -25,8 +25,7 @@ async function coverageFor(tx: DomainTransaction, businessId: string, customerId
     where: { businessId, mealTypeId, periodStart: { lte: serviceDate }, periodEnd: { gte: serviceDate }, subscription: { is: { customerId, type: SubscriptionType.COUNT, status: { in: [SubscriptionStatus.SCHEDULED, SubscriptionStatus.ACTIVE] }, startDate: { lte: serviceDate }, endDate: { gte: serviceDate } } } },
   });
   if (count) return AllocationKind.COUNT;
-  const customer = await requireCustomerInBusiness(tx, businessId, customerId);
-  if (customer.payAsYouGoEnabled) return AllocationKind.PAYG;
+  if (payAsYouGoEnabled) return AllocationKind.PAYG;
   throw new DomainError("No active meal plan covers this meal.", "INSUFFICIENT_CAPACITY");
 }
 
@@ -50,7 +49,7 @@ async function createOrderInTransaction(tx: DomainTransaction, actor: DomainActo
   const orderingCutoffAt = cutoffAt(serviceDate, meal.orderingCutoffMinutes);
   const cancellationCutoffAt = cutoffAt(serviceDate, meal.cancellationCutoffMinutes);
   if (actor.role === "CUSTOMER" && new Date() >= orderingCutoffAt) throw new DomainError("The ordering cutoff has passed.", "CUTOFF_PASSED");
-  const allocationKind = await coverageFor(tx, actor.businessId, input.customerId, meal.id, serviceDate, quantity);
+  const allocationKind = await coverageFor(tx, actor.businessId, input.customerId, meal.id, serviceDate, quantity, customer.payAsYouGoEnabled);
   const order = await tx.order.create({ data: { businessId: actor.businessId, customerId: input.customerId, serviceDate, source, createdByUserId: actor.userId } });
   const item = await tx.orderItem.create({
     data: { businessId: actor.businessId, orderId: order.id, customerId: input.customerId, serviceDate, mealTypeId: meal.id, source, quantity, allocationKind, menuItemNameSnapshot: menuItem.name, unitPriceMinor: price.amountMinor, orderingCutoffAt, cancellationCutoffAt, replacesOrderItemId },

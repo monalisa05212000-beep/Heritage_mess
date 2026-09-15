@@ -8,7 +8,7 @@ export function DatabaseUnavailablePanel() {
         <p className="utility-type mt-10 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--saffron-deep)]">Database offline</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight">Cannot reach the database.</h1>
         <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
-          Heritage Mess is running locally, but PostgreSQL is not reachable at the configured Supabase host. Restore database access, then refresh this page.
+          The system cannot reach its database right now. Nothing was changed. Refresh this page to try again.
         </p>
       </section>
     </main>

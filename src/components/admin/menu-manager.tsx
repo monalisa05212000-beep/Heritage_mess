@@ -83,14 +83,14 @@ export function MenuManager({ serviceDate, today, mealTypes, menu }: { serviceDa
   }
 
   return (
-    <div className="grid gap-5">
-      <section className="paper-panel rounded-2xl p-5 sm:p-6">
+    <div className="grid min-w-0 gap-5">
+      <section className="paper-panel min-w-0 rounded-2xl p-5 sm:p-6">
         <p className="utility-type text-[10px] font-bold uppercase tracking-[0.1em] text-[var(--muted)]">Menu management</p>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl font-black tracking-tight">{readableDate(serviceDate)}</h1>
           <StatusPill tone={(savedStatus ?? menu?.status) === "PUBLISHED" ? "ready" : "neutral"}>{savedStatus ?? menu?.status ?? "Not created"}</StatusPill>
         </div>
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1" aria-label="Choose service date">
+        <div className="mt-5 flex w-full min-w-0 gap-2 overflow-x-auto pb-1" aria-label="Choose service date">
           {serviceDays.map((date) => (
             <Button key={date} variant={date === serviceDate ? "primary" : "secondary"} className="min-h-10 shrink-0 px-3" onClick={() => go(date)}>
               {date === today ? "Today" : new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "Asia/Kolkata" }).format(new Date(`${date}T12:00:00+05:30`))}
@@ -103,7 +103,7 @@ export function MenuManager({ serviceDate, today, mealTypes, menu }: { serviceDa
       {message ? <p className="rounded-xl bg-[var(--leaf-pale)] px-4 py-3 text-sm font-semibold text-[var(--leaf)]" role="status">{message}</p> : null}
       {error ? <p className="rounded-xl bg-[var(--danger-pale)] px-4 py-3 text-sm font-semibold text-[var(--danger)]" role="alert">{error}</p> : null}
 
-      <form className="paper-panel grid gap-4 rounded-2xl p-5 sm:p-6" onSubmit={(event) => { event.preventDefault(); void save(event.currentTarget, false); }}>
+      <form className="paper-panel grid min-w-0 gap-4 rounded-2xl p-5 sm:p-6" onSubmit={(event) => { event.preventDefault(); void save(event.currentTarget, false); }}>
         {mealTypes.length === 0 ? <p className="text-sm text-[var(--muted)]">No active meal types are available. Menus cannot be saved until meal types are configured.</p> : mealTypes.map((mealType) => {
           const item = items.get(mealType.id);
           return <div key={mealType.id} className="grid gap-3 rounded-xl border border-[var(--line)] bg-white/70 p-4">

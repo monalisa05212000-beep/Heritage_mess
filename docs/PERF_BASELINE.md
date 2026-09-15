@@ -83,3 +83,68 @@ is not needed to diagnose this):
 - If the port is `5432` on a pooler host, that is the session pooler; the transaction pooler on
   `6543` is the correct choice for serverless, and `pgbouncer=true` must be present or
   prepared-statement errors follow.
+
+---
+
+## After batching reads and trimming the login path
+
+`Promise.all` was providing **no concurrency at all** — proven by `/api/health?diag=1`:
+
+| 5 × `SELECT 1` | Time | Per query |
+|---|---|---|
+| Sequential | 3,270 ms | 654 ms |
+| `Promise.all` | 3,270 ms | 654 ms ← no parallelism |
+| `$transaction([...])` | 1,700 ms | 340 ms |
+
+The pooled connection serialises every query, so each page paid `queries × 654 ms` in strict
+sequence. Nine read sites were converted to batched transactions, and the login critical path went
+from six round trips to three.
+
+### End-to-end result
+
+| Action | Before | After | Change |
+|---|---|---|---|
+| Login → dashboard | 19,513 ms | **10,834 ms** | −44% |
+| GET /admin | 11,208 ms | **4,652 ms** | −58% |
+| GET /admin/customers | 3,914 ms | 2,227 ms | −43% |
+| GET /admin/orders | 6,274 ms | 3,284 ms | −48% |
+| GET /admin/menus | 5,390 ms | 4,106 ms | −24% |
+| GET /admin/money | 6,460 ms | 5,248 ms | −19% |
+| POST /api/admin/menus (write) | 9,278 ms | 6,515 ms | −30% |
+| POST /api/auth/login (bad creds) | 4,840–7,570 ms | **3,143–3,292 ms** | −50%, and far more consistent |
+
+Single-sample page timings carry cold-start noise of a second or more; the login and `/admin`
+figures were the most repeatable and are the ones to trust.
+
+## The remaining bottleneck is not in this codebase
+
+Everything above is application-level work around a database that answers `SELECT 1` in **654 ms**
+while sitting in the same region as the compute. That floor now dominates every remaining number.
+
+**Evidence for what it is.** A standalone query costs 654 ms, but five queries inside one
+`$transaction` cost 340 ms each. If the cost were raw network distance, batching could not halve
+it. What batching changes is the number of *transactions*: Supabase's pooler (Supavisor) in
+transaction mode assigns a server connection per transaction, and a standalone query is its own
+implicit transaction. So roughly 300–400 ms of every query is **pooler connection-assignment
+overhead**, not query execution and not distance.
+
+### Experiment for the owner (about 5 minutes, fully reversible)
+
+`/api/health` makes this measurable. Note the current numbers, then try each alternative
+`DATABASE_URL` and re-check:
+
+```
+curl https://heritage-mess-lhu5.vercel.app/api/health?diag=1
+```
+
+1. **Session pooler** — same host, port `5432`, drop `pgbouncer=true`. Holds a server connection
+   instead of reassigning per transaction. Expect `warmQueryMs` to collapse if the hypothesis is
+   right. Trade-off: fewer connection slots, so watch for `P2037` under concurrency.
+2. **Direct connection** — `db.<ref>.supabase.co:5432`. Bypasses the pooler entirely; use only as a
+   diagnostic, not a production setting for serverless.
+3. **Supabase plan** — a free-tier instance shares pooler capacity; the paid tier removes that
+   contention.
+
+Whichever lowers `warmQueryMs` is the answer, and every number in the table above scales down with
+it. A 654 ms → 10 ms query turns the 4.6 s dashboard into roughly 200 ms — far more than any
+further application change can deliver.

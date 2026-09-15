@@ -153,7 +153,7 @@ generated. That finding is the reason this addendum documents a vulnerability th
 
 ## Verification
 
-- **72 tests pass** (was 61 — 11 new covering the matching matrix, the wildcard payloads, the
+- **77 tests pass** (was 61 — 16 new covering the matching matrix, rate-limit keying, the wildcard payloads, the
   ambiguity guard and money formatting), `tsc --noEmit` clean, `next build` clean.
 - **Production sign-in matrix NOT yet re-run.** PR #2 is not merged, and the Vercel preview is
   behind deployment protection, so the "After" column above is what the unit tests assert, not a

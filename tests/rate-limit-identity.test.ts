@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
+import type { PrismaClient } from "@prisma/client";
+
 import { consumeRateLimit } from "../src/lib/security/rate-limit";
 
-function prismaSpy() {
-  const count = vi.fn().mockResolvedValue(0);
+function prismaSpy(existingInWindow = 0) {
+  const count = vi.fn().mockResolvedValue(existingInWindow);
   const create = vi.fn().mockResolvedValue({});
-  return { client: { rateLimitEvent: { count, create } } as never, count, create };
+  const client = { rateLimitEvent: { count, create } } as unknown as PrismaClient;
+  return { client, count, create };
 }
 
 const requestFrom = (ip: string) => new Request("http://localhost/api/x", { method: "POST", headers: { "x-forwarded-for": ip } });
@@ -51,8 +54,7 @@ describe("rate-limit keying", () => {
   });
 
   it("refuses once the window is full", async () => {
-    const { client, create } = prismaSpy();
-    client.rateLimitEvent.count = vi.fn().mockResolvedValue(20);
+    const { client, create } = prismaSpy(20);
 
     const result = await consumeRateLimit(client, requestFrom("203.0.113.9"), { ...config, identity: "customer-1" });
 

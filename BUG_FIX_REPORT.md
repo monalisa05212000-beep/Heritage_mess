@@ -27,7 +27,7 @@ All 7 bugs from the E2E report are fixed, plus 4 additional issues surfaced by b
 
 ## Known remaining risks (documented, not fixed)
 
-1. **Write latency (10–25 s)** is infra-level: serverless cold starts + Supabase transaction pooler with `connection_limit=1`. Recommendations: keep the pooler on port 6543 with pgbouncer per the manual; consider Vercel Fluid Compute/warmer, and revisit `connection_limit` if the plan allows.
+1. **Write latency (10–25 s)** — superseded. See the performance addendum below and [docs/PERF_BASELINE.md](docs/PERF_BASELINE.md); the cause was cross-region compute plus serialised queries, not cold starts, and most of it is now fixed.
 2. **No retry on Serializable conflicts (P2034)** anywhere in the codebase — a pre-existing systemic gap, unchanged by these fixes; a concurrent-write serialization failure still maps to 500. Worth a shared retry helper later.
 3. **Security note:** the admin manual (containing credentials) was briefly committed to the public repo during this work; the branch history has been rewritten to purge it and the file is now gitignored, but **the admin password should be rotated** since orphaned commits can remain fetchable by SHA on GitHub until garbage collection.
 
@@ -55,3 +55,32 @@ Reported from the live admin panel: the sidebar nav read "Dashboard Menus C…" 
 ## Verification
 
 Automated responsive sweep against production — 6 admin routes and 3 customer routes at **375 / 768 / 1280 / 1920 px** (36 page-widths): no page overflow, no off-screen or clipped content, nav renders as a column ≥1024px and a fully visible wrapping row below, on every page. Test data was reactivated for the portal sweep and deactivated again afterwards.
+
+---
+
+# Addendum — Vercel latency and failure fixes (15 September 2026)
+
+Reported: repeated site failures and long page renders. All four symptoms the owner selected
+(hangs that error out, the database-offline panel, 500s, general slowness) traced to one measured
+cause and its consequences. Full evidence: [docs/PERF_BASELINE.md](docs/PERF_BASELINE.md).
+
+| # | Issue | Root cause | Fix |
+|---|---|---|---|
+| 13 | CRITICAL — every database query crossed the planet | No `vercel.json`, so Vercel used its default compute region `iad1` (Virginia) while Supabase is `ap-south-1`. Proven by `X-Vercel-Id: bom1::iad1::…` | `vercel.json` pins compute to `bom1`. `preferredRegion` is deprecated in this Next version, so `vercel.json` is the only supported mechanism. Verified: header now reads `bom1::bom1` |
+| 14 | CRITICAL — `Promise.all` gave zero concurrency | The pooled connection serialises queries, so every page paid `queries × 654 ms` in strict sequence. Measured: 5 sequential = 5 via `Promise.all` = 3,270 ms; 5 batched = 1,700 ms | Nine read sites converted from `Promise.all` to `prisma.$transaction([...])` |
+| 15 | HIGH — login made six sequential round trips | Rate-limit count, rate-limit insert, failed-attempt count, user lookup, attempt insert, session insert | Independent reads batched; the success audit record deferred via `after()`. Failed attempts stay awaited — they are the brute-force counter |
+| 16 | HIGH — transient database failures surfaced as opaque 500s | `P2024`/`P2028`/`P2034`/`P2037`/`P1001`/`P1002` fell through `domainError()` to the generic catch-all | Mapped to 503 with `Retry-After` and an accurate "nothing was saved" message, in one place so all 22 routes inherit it |
+| 17 | HIGH — a failed page render showed Next's bare error screen | No error boundaries | `admin/error.tsx` and `customer/error.tsx` render a retryable page, using the `retry` prop (stable in this version; `reset` is discouraged) |
+| 18 | MEDIUM — no way to attribute latency | Nothing measured the database from inside the function | `/api/health` reports compute region and database round-trip time, and logs the connection shape once per cold start |
+| 19 | LOW | `coverageFor` re-read a customer row already loaded in the same transaction; `PrismaClient` was not reused in production; the offline panel told a production owner the app "is running locally" | All three corrected |
+
+**Deliberately not done:** `maxDuration` was not raised — Fluid compute already defaults to 300 s, and
+the app returns its *own* errors at ~25 s, which is Prisma's `maxWait` + `timeout` ceiling, not a
+platform kill. Raising it would only let slow writes hang longer. A setup-status memoisation was
+reverted after its test correctly caught that it would permanently suppress the database-offline
+panel on a warm instance.
+
+**Results:** login → dashboard 19.5 s → 10.8 s; `/admin` 11.2 s → 4.6 s; failed login 4.8–7.6 s →
+3.2 s. 45/45 tests pass, types and build clean. The remaining ~650 ms-per-query floor is a
+connection-target problem for the owner to confirm from the function logs — see
+[PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) item 1.

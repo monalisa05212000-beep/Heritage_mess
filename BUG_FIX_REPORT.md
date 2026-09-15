@@ -97,7 +97,7 @@ customer interface of UI and everything else."*
 Reproduced against production before changing anything. The portal matched the customer's name
 **case-sensitively** and their phone number **as an exact string**:
 
-| Typed into the portal | Before (measured on production) | After (unit-tested; production re-run pending merge) |
+| Typed into the portal | Before (measured on production) | After (measured on production) |
 |---|---|---|
 | `E2E Test Customer` + `9000000001` | 200 | 200 |
 | `e2e test customer` | **401** | 200 |
@@ -155,7 +155,30 @@ generated. That finding is the reason this addendum documents a vulnerability th
 
 - **77 tests pass** (was 61 — 16 new covering the matching matrix, rate-limit keying, the wildcard payloads, the
   ambiguity guard and money formatting), `tsc --noEmit` clean, `next build` clean.
-- **Production sign-in matrix NOT yet re-run.** PR #2 is not merged, and the Vercel preview is
-  behind deployment protection, so the "After" column above is what the unit tests assert, not a
-  live measurement. Production was re-checked at 23:50 IST and still returns 401 for a lowercase
-  name. The matrix will be re-run against production once PR #2 merges.
+- **Production sign-in matrix re-run after the merge — 8/8 pass**, including two negative rows
+  (wrong name with the right phone, and the right name with the wrong phone: both 401). The session
+  cookie used for the browser pass below was obtained with a *lowercase name and a `+91` phone* —
+  the exact combination that returned 401 an hour earlier.
+- **The ILIKE bypass was attempted against production and refused:** `{"name":"%%"}` and
+  `{"name":"%_%"}` with a valid phone number both return 401.
+- **Mobile verified in a real browser** (headless Chrome over CDP, 390x844, DPR 2) on `/customer`,
+  `/customer/orders` and `/customer/account`: **0 px horizontal overflow, no element past the right
+  edge, no tap target under 44 px, no form control under 16 px** on any of the three. Screenshots
+  reviewed: the account page reads "₹50 in credit" and "Refund for a cancelled meal", with a date
+  on every ledger row.
+- **Not verified end-to-end: the cancel button.** No menu is published for any orderable date, so
+  no CONFIRMED order can exist to cancel. Its rendering conditions are unit-tested and the
+  underlying `cancelOrderItem` path is unchanged from the run that produced the cancelled orders
+  visible in the screenshots.
+
+## Still open for the owner
+
+1. **No menus are published** for today or the next two days, so a customer who signs in has
+   nothing to order. This is content, not code.
+2. **"E2E Test Customer" (9000000001) is still ACTIVE in production.** It was left active to run
+   the matrix above and should be deactivated: Admin → Customers → search "E2E Test Customer" →
+   Deactivate.
+3. **Two real customers cannot order at all** — "Walkthrough Test Customer" and "Walkthrough Fix
+   Verification" have pay-as-you-go off and no meal plan, and no admin screen creates plans, so
+   `coverageFor` refuses every order. Enable pay-as-you-go for them.
+4. **Rotate the admin password** (carried over — see the note in the first section).

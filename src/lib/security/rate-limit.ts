@@ -6,6 +6,14 @@ type RateLimitConfig = {
   scope: string;
   limit: number;
   windowMs: number;
+  /**
+   * Count this window against a caller identity (a customer id, a phone number)
+   * instead of the client IP. A mess or hostel shares one WiFi address, so an
+   * IP-keyed limit is really a limit on the whole building: one hungry customer
+   * retrying would lock everybody else out of ordering. Leave unset for
+   * genuinely anonymous traffic, where the IP is all there is.
+   */
+  identity?: string;
 };
 
 export async function consumeRateLimit(
@@ -17,11 +25,12 @@ export async function consumeRateLimit(
   const windowStart = new Date(now.getTime() - config.windowMs);
   const forwardedFor = request.headers.get("x-forwarded-for");
   const ip = forwardedFor?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip") ?? "missing-client-address";
-  const ipHash = createHash("sha256").update(ip).digest("hex");
+  const key = config.identity ? `id:${config.identity}` : `ip:${ip}`;
+  const keyHash = createHash("sha256").update(key).digest("hex");
   const count = await prisma.rateLimitEvent.count({
     where: {
       scope: config.scope,
-      keyHash: ipHash,
+      keyHash,
       occurredAt: { gte: windowStart },
     },
   });
@@ -31,7 +40,7 @@ export async function consumeRateLimit(
   }
 
   await prisma.rateLimitEvent.create({
-    data: { scope: config.scope, keyHash: ipHash, occurredAt: now },
+    data: { scope: config.scope, keyHash, occurredAt: now },
   });
 
   return { allowed: true, retryAfterSeconds: 0 };

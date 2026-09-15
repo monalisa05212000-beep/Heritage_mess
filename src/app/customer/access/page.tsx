@@ -16,7 +16,7 @@ export default async function CustomerAccessPage() {
         <Brand />
         <p className="utility-type mt-10 text-[11px] font-bold uppercase tracking-[0.1em] text-[var(--saffron-deep)]">Customer access</p>
         <h1 className="mt-2 text-3xl font-black tracking-tight">Your meals, simply.</h1>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Enter the same name and phone number your caterer has on record.</p>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Enter your name and the phone number your caterer has on record. Capitals and spacing don&rsquo;t matter.</p>
         <div className="mt-8"><CustomerAccessForm /></div>
         <p className="mt-6 text-center text-xs leading-5 text-[var(--muted)]">Are you the caterer? <Link className="font-bold text-[var(--saffron-deep)]" href="/login">Admin sign in</Link></p>
       </section>

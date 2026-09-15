@@ -26,7 +26,7 @@ async function coverageFor(tx: DomainTransaction, businessId: string, customerId
   });
   if (count) return AllocationKind.COUNT;
   if (payAsYouGoEnabled) return AllocationKind.PAYG;
-  throw new DomainError("No active meal plan covers this meal.", "INSUFFICIENT_CAPACITY");
+  throw new DomainError("No active meal plan covers this meal. Ask the mess to set up a plan for you or to enable pay-as-you-go.", "INSUFFICIENT_CAPACITY");
 }
 
 async function createOrderInTransaction(tx: DomainTransaction, actor: DomainActor, input: CreateOrderInput, source: OrderSource, replacesOrderItemId?: string) {

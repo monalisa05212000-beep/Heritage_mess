@@ -84,3 +84,78 @@ panel on a warm instance.
 3.2 s. 45/45 tests pass, types and build clean. The remaining ~650 ms-per-query floor is a
 connection-target problem for the owner to confirm from the function logs — see
 [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md) item 1.
+
+---
+
+# Addendum — Customer portal fixes (15 September 2026)
+
+Reported: *"admin is all good but customer all features are not working, there are problems in the
+customer interface of UI and everything else."*
+
+## The headline bug: nobody could sign in
+
+Reproduced against production before changing anything. The portal matched the customer's name
+**case-sensitively** and their phone number **as an exact string**:
+
+| Typed into the portal | Before (measured on production) | After (unit-tested; production re-run pending merge) |
+|---|---|---|
+| `E2E Test Customer` + `9000000001` | 200 | 200 |
+| `e2e test customer` | **401** | 200 |
+| `E2E TEST CUSTOMER` | **401** | 200 |
+| `90000 00001` | **401** | 200 |
+| `+91 9000000001` | **401** | 200 |
+| `+919000000001` | **401** | 200 |
+| `09000000001` | **401** | 200 |
+
+The `Customer` table already had a `normalizedPhone` column with a unique index, and the codebase
+already had a `normalizePhone()` helper. The sign-in route used neither. Any customer who typed
+their own name naturally, or their number with a country code, was locked out of the product
+entirely — which is the whole of "customer features are not working".
+
+## Fixes
+
+| # | Severity | Issue | Root cause | Fix |
+|---|---|---|---|---|
+| 20 | CRITICAL | Customers could not sign in unless they reproduced the admin's exact capitalisation and phone formatting | `findFirst` on raw `name` + raw `phone`; `normalizedPhone` and `normalizePhone()` both ignored | Phone narrows in SQL on its last 10 digits; name compared in JS, case- and spacing-insensitively. Ambiguous matches refuse rather than guess — `src/app/api/customer-access/route.ts` |
+| 21 | HIGH | **Sign-in bypass introduced by the first draft of fix 20 and caught in review before shipping** | Prisma's `mode: "insensitive"` compiles to an *unescaped* `ILIKE`. `{"name":"%%","phone":"<digits>"}` matches every customer, collapsing a two-factor sign-in to the phone number alone — and that session can order, cancel and read the victim's full ledger | The name is never sent to the database. Regression tests cover `%%`, `%` and `_` payloads |
+| 22 | HIGH | Ten sign-ins and twenty orders per 15 minutes **for an entire building** | Rate limits keyed on client IP; a mess or hostel shares one WiFi address | Limits key on customer id (or the submitted phone digits); a generous IP guard remains against floods — `src/lib/security/rate-limit.ts` |
+| 23 | HIGH | Account balance could disagree with the admin's figure | Balance was summed from the 30 newest ledger rows that happened to be displayed | Aggregated over the whole ledger; `take: 30` now only bounds the visible activity list |
+| 24 | HIGH | Optimistic "Ordered" state leaked onto the wrong day | Switching the date strip from `<a>` to `<Link>` made navigation soft, and Next strips search params from the page cache key, so the board kept its state across dates | `key={serviceDate}` remounts the board per date |
+| 25 | MEDIUM | `/customer/orders` was a dead end: no service dates, no way to cancel | Page rendered status and price only | Service date, cancel button and cutoff time, via a shared `CancelOrderButton` used by both the board and the history page |
+| 26 | MEDIUM | Order button offered meals the server was certain to refuse | Closure days, ordering cutoffs and missing prices were only discovered on submit | Pre-computed server-side; the button is disabled with the reason shown |
+| 27 | MEDIUM | A credit rendered as "₹-50"; ledger rows showed accounting jargon with no dates | Raw `amountMinor / 100` and raw `description` | `formatMoney` / `formatServiceDate` / `describeLedgerEntry` — `src/lib/format.ts`. "₹50 in credit", "Refund for a cancelled meal" |
+| 28 | MEDIUM | iOS Safari zoomed in on every form and stayed zoomed | Inputs inherited 14px; Safari auto-zooms any focused control under 16px | `text-base` on the shared input and textarea — fixes every form in the app |
+| 29 | LOW | Customer nav touch targets were 38px | `py-2` on a 20px line box | `py-3` (46px) on all three links |
+| 30 | LOW | Customer sign-in button re-enabled mid-navigation, so it looked like nothing happened | Same defect as bug 3 on the admin login, never mirrored here | Submitting state persists through navigation, with a 30 s safety valve |
+| 31 | LOW | A long dish name could push the page sideways | `min-w-0` wrappers with no `overflow-wrap` | `break-words` on the three wrappers |
+
+Also: "No active meal plan covers this meal" now tells the customer what to do about it, and the
+account page warns a customer who has no plan *and* no pay-as-you-go **before** they try to order.
+
+## How the security bug was caught
+
+The first draft of fix 20 used `name: { equals, mode: "insensitive" }` — the obvious Prisma
+idiom. A four-lens adversarial review (auth / React-RSC / customer journey / mobile) raised 21
+findings; 11 survived a refute-by-default verification pass. The auth reviewer reproduced the
+`ILIKE` behaviour against the installed Prisma 6.19.3 query engine rather than from memory, and
+correctly noted that the green test suite could not have caught it: the tests mock
+`prisma.customer.findMany` and assert on the shape of the `where` object, so no SQL is ever
+generated. That finding is the reason this addendum documents a vulnerability that never shipped.
+
+## Deliberately not done
+
+- **Plan-aware order copy.** A PREPAID (plan-covered) meal still shows a rupee figure and the
+  cancel text says "credited" rather than "returned to your plan". Refuted as unreachable in the
+  current data — no admin screen creates prepaid subscriptions — but it becomes real the day one does.
+- **Coverage pre-check on the Order button.** The three cheap refusals are pre-computed; entitlement
+  and capacity are not, because that needs the full allocation check per meal on every page render.
+- **Ambiguous-match telemetry.** Two customers matching the same details is refused but not logged.
+
+## Verification
+
+- **77 tests pass** (was 61 — 16 new covering the matching matrix, rate-limit keying, the wildcard payloads, the
+  ambiguity guard and money formatting), `tsc --noEmit` clean, `next build` clean.
+- **Production sign-in matrix NOT yet re-run.** PR #2 is not merged, and the Vercel preview is
+  behind deployment protection, so the "After" column above is what the unit tests assert, not a
+  live measurement. Production was re-checked at 23:50 IST and still returns 401 for a lowercase
+  name. The matrix will be re-run against production once PR #2 merges.

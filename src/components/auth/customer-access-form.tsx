@@ -29,13 +29,17 @@ export function CustomerAccessForm() {
       if (!response.ok) {
         setErrors(payload.fieldErrors ?? {});
         setMessage(payload.error ?? "Customer access could not be started. Please try again.");
+        setIsSubmitting(false);
         return;
       }
+      // Keep the submitting state on: navigation to /customer renders the menu
+      // on the server, so re-enabling here would look like nothing happened.
       router.replace("/customer");
       router.refresh();
+      // Safety valve: if navigation bounces back this form stays mounted.
+      setTimeout(() => setIsSubmitting(false), 30_000);
     } catch {
       setMessage("Couldn’t reach Heritage Mess. Please try again.");
-    } finally {
       setIsSubmitting(false);
     }
   }

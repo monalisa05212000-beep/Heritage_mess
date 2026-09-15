@@ -148,3 +148,45 @@ curl https://heritage-mess-lhu5.vercel.app/api/health?diag=1
 Whichever lowers `warmQueryMs` is the answer, and every number in the table above scales down with
 it. A 654 ms → 10 ms query turns the 4.6 s dashboard into roughly 200 ms — far more than any
 further application change can deliver.
+
+---
+
+## RESOLVED — the database was in Seoul, not Mumbai (15 September 2026)
+
+The remaining ~650 ms per query was geography after all. The Supabase project is in
+**`ap-northeast-2` (Seoul)**, not `ap-south-1`. Worse, `vercel.json` takes precedence over the
+Vercel dashboard setting, so the earlier `bom1` pin was **silently overriding** the owner's own
+redeploy to Seoul — compute stayed in Mumbai and kept paying a ~330 ms round trip per query.
+
+Repinned to `icn1` (Vercel's ap-northeast-2). Compute and database are now co-located.
+
+### Final results
+
+| Action | Original | Final | Improvement |
+|---|---|---|---|
+| `SELECT 1` (warm) | 654 ms | **19 ms** | **34×** |
+| Login → dashboard | 19,513 ms | **1,545 ms** | **12.6×** |
+| GET /admin | 11,208 ms | **491 ms** | **22.8×** |
+| GET /admin/menus | 5,390 ms | 413 ms | 13× |
+| GET /admin/money | 6,460 ms | 718 ms | 9× |
+| GET /admin/customers | 3,914 ms | 592 ms | 6.6× |
+| GET /admin/orders | 6,274 ms | 1,630 ms | 3.8× |
+| POST /api/admin/menus (write) | 9,278 ms | **560 ms** | **16.6×** |
+| POST /api/auth/login (bad creds) | 4,840–7,570 ms | 501–617 ms | ~10× |
+
+`warmQueryMs` is now a steady 19 ms across samples — a healthy figure for a pooled connection, and
+the clearest possible confirmation that compute and database are in the same region.
+
+### Lesson worth keeping
+
+`vercel.json` beats the dashboard. Changing the region in the Vercel UI does nothing while a
+`regions` key exists in the repo — the file is the source of truth and must be edited instead.
+
+### Should the stack move to Mumbai?
+
+Not urgently. Requests now go: user (India) → edge `bom1` → compute `icn1` → database (Seoul). The
+India↔Seoul hop is paid **once per request**, not once per query, which is why the numbers above are
+already good. Relocating both to Mumbai would save perhaps a further 100–300 ms per page — real but
+modest, and it would require creating a new Supabase project and migrating a live business database.
+Not worth that risk now; revisit during a quiet period with a tested backup if the last 200 ms
+matters.

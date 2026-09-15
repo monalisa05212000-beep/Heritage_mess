@@ -37,3 +37,21 @@ All 7 bugs from the E2E report are fixed, plus 4 additional issues surfaced by b
 - `tsc --noEmit` → clean · `next build` → compiled successfully
 - Blindspot passes: backend (code-reviewer) and frontend (react-reviewer) agents on the diffs; all CRITICAL/HIGH/MEDIUM findings addressed
 - Post-deploy: production re-verification of bugs 1, 2, 4, 5 planned with headed Chrome + screenshots after merge
+
+---
+
+# Addendum — Responsive UI fixes (15 September 2026)
+
+Reported from the live admin panel: the sidebar nav read "Dashboard Menus C…" with a stray horizontal scrollbar, and content looked shoved to one side.
+
+| # | Bug | Root cause | Fix |
+|---|---|---|---|
+| 8 | HIGH — admin nav clipped to "Dashboard Menus C…" with a horizontal scrollbar under the left column (all screens ≥1024px) | The nav switched to `display:block` at `lg:`, but its `<a>` children are inline elements, so they flowed horizontally inside the 184px sidebar column and were cut off by `overflow-x-auto` | Nav is a flex column from `lg` up and a wrapping pill row below it — `src/components/admin-nav.tsx` |
+| 9 | MEDIUM — mobile nav hid items behind a horizontal scroll (6 items = 512px in a 343px row) | `overflow-x-auto` scroll strip used for primary navigation | Wraps to two rows; every destination visible without scrolling |
+| 10 | MEDIUM — `/admin/menus` overflowed the viewport on mobile (745px wide at 375px) and pushed the date input off-screen at 768px | Grid items default to `min-width:auto`, so the scrolling service-date strip contributed its full 816px intrinsic width to the cell | `min-w-0` on the grid/section/form and `w-full min-w-0` on the strip — `src/components/admin/menu-manager.tsx` |
+| 11 | LOW — no indication of the current section | Nav had no active state | Active link highlighted via `usePathname`, with `aria-current="page"` |
+| 12 | LOW — wide screens wasted space | Shell capped at `max-w-6xl` | Admin shell widened to `max-w-7xl`; customer nav wraps instead of scrolling |
+
+## Verification
+
+Automated responsive sweep against production — 6 admin routes and 3 customer routes at **375 / 768 / 1280 / 1920 px** (36 page-widths): no page overflow, no off-screen or clipped content, nav renders as a column ≥1024px and a fully visible wrapping row below, on every page. Test data was reactivated for the portal sweep and deactivated again afterwards.
